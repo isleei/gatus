@@ -75,3 +75,27 @@ func GetDefaultConfig() *Config {
 		},
 	}
 }
+
+// Clone creates a deep copy of the UI configuration
+func (config *Config) Clone() *Config {
+	if config == nil {
+		return nil
+	}
+	clone := &Config{
+		HideConditions:              config.HideConditions,
+		HideHostname:                config.HideHostname,
+		HideURL:                     config.HideURL,
+		HidePort:                    config.HidePort,
+		HideErrors:                  config.HideErrors,
+		DontResolveFailedConditions: config.DontResolveFailedConditions,
+		ResolveSuccessfulConditions: config.ResolveSuccessfulConditions,
+	}
+	if config.Badge != nil && config.Badge.ResponseTime != nil {
+		clone.Badge = &Badge{
+			ResponseTime: &ResponseTime{
+				Thresholds: append([]int(nil), config.Badge.ResponseTime.Thresholds...),
+			},
+		}
+	}
+	return clone
+}

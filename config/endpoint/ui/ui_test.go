@@ -51,3 +51,24 @@ func TestValidateAndSetDefaults(t *testing.T) {
 		})
 	}
 }
+
+func TestConfig_Clone(t *testing.T) {
+	original := &Config{
+		HideErrors: true,
+		Badge: &Badge{
+			ResponseTime: &ResponseTime{Thresholds: []int{10, 20, 30, 40, 50}},
+		},
+	}
+
+	clone := original.Clone()
+	if clone == nil {
+		t.Fatal("expected clone to be non-nil")
+	}
+	if !clone.HideErrors {
+		t.Fatal("expected clone to copy HideErrors")
+	}
+	clone.Badge.ResponseTime.Thresholds[0] = 999
+	if original.Badge.ResponseTime.Thresholds[0] == 999 {
+		t.Fatal("expected clone thresholds to be deep copied")
+	}
+}

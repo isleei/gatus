@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/TwiN/gatus/v5/config/endpoint"
+	endpointui "github.com/TwiN/gatus/v5/config/endpoint/ui"
 	"github.com/TwiN/gatus/v5/config/gontext"
 )
 
@@ -503,5 +504,42 @@ func TestResult_CalculateSuccess(t *testing.T) {
 				t.Errorf("Expected success=%v, got %v", tt.expectedSuccess, result.Success)
 			}
 		})
+	}
+}
+
+func TestSuite_ValidateAndSetDefaults_AppliesSuiteUIConfigToEndpoints(t *testing.T) {
+	s := &Suite{
+		Name:     "test-suite",
+		UIConfig: &endpointui.Config{HideErrors: true},
+		Endpoints: []*endpoint.Endpoint{
+			{Name: "endpoint1", URL: "https://example.org", Conditions: []endpoint.Condition{endpoint.Condition("[STATUS] == 200")}},
+		},
+	}
+
+	if err := s.ValidateAndSetDefaults(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.Endpoints[0].UIConfig == nil || !s.Endpoints[0].UIConfig.HideErrors {
+		t.Fatal("expected suite UI config to be applied to endpoint")
+	}
+}
+
+func TestSuite_ValidateAndSetDefaults_DoesNotOverrideEndpointUIConfig(t *testing.T) {
+	s := &Suite{
+		Name:     "test-suite",
+		UIConfig: &endpointui.Config{HideErrors: true},
+		Endpoints: []*endpoint.Endpoint{
+			{Name: "endpoint1", URL: "https://example.org", UIConfig: &endpointui.Config{HideErrors: false, HideURL: true}, Conditions: []endpoint.Condition{endpoint.Condition("[STATUS] == 200")}},
+		},
+	}
+
+	if err := s.ValidateAndSetDefaults(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.Endpoints[0].UIConfig.HideErrors {
+		t.Fatal("expected endpoint UI config to be preserved")
+	}
+	if !s.Endpoints[0].UIConfig.HideURL {
+		t.Fatal("expected endpoint-specific UI config to be preserved")
 	}
 }
