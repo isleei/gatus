@@ -2711,6 +2711,21 @@ endpoints:
 | `security`       | Security configuration       | `{}`    |
 | `security.basic` | HTTP Basic configuration     | `{}`    |
 | `security.oidc`  | OpenID Connect configuration | `{}`    |
+| `security.authorization` | Group-level authorization configuration for endpoint/suite status APIs | `{}` |
+
+
+#### Authorization
+| Parameter                                | Description                                                                                     | Default |
+|:-----------------------------------------|:------------------------------------------------------------------------------------------------|:--------|
+| `security.authorization.endpoint-groups` | List of endpoint groups that can be accessed in `/api/v1/endpoints/*` and `/api/v1/groups`. Empty means all groups are allowed. | `[]` |
+| `security.authorization.suite-groups`    | List of suite groups that can be accessed in `/api/v1/suites/*` and `/api/v1/groups`. Empty means all groups are allowed.      | `[]` |
+
+```yaml
+security:
+  authorization:
+    endpoint-groups: ["core", "partner"]
+    suite-groups: ["smoke"]
+```
 
 
 #### Basic Authentication

@@ -29,6 +29,9 @@ func SuiteStatuses(cfg *config.Config) fiber.Handler {
 				}
 			}
 		}
+		if cfg.Security != nil {
+			suiteStatuses = cfg.Security.FilterSuiteStatuses(suiteStatuses)
+		}
 		return c.Status(fiber.StatusOK).JSON(suiteStatuses)
 	}
 }
@@ -53,6 +56,11 @@ func SuiteStatus(cfg *config.Config) fiber.Handler {
 					"error": fmt.Sprintf("Suite with key '%s' not found", key),
 				})
 			}
+		}
+		if cfg.Security != nil && !cfg.Security.IsSuiteGroupAllowed(status.Group) {
+			return c.Status(404).JSON(fiber.Map{
+				"error": fmt.Sprintf("Suite with key '%s' not found", key),
+			})
 		}
 		return c.Status(fiber.StatusOK).JSON(status)
 	}

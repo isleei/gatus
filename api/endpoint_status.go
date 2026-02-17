@@ -36,6 +36,9 @@ func EndpointStatuses(cfg *config.Config) fiber.Handler {
 			} else if endpointStatusesFromRemote != nil {
 				endpointStatuses = append(endpointStatuses, endpointStatusesFromRemote...)
 			}
+			if cfg.Security != nil {
+				endpointStatuses = cfg.Security.FilterEndpointStatuses(endpointStatuses)
+			}
 			// Marshal endpoint statuses to JSON
 			data, err = json.Marshal(endpointStatuses)
 			if err != nil {
@@ -102,6 +105,9 @@ func EndpointStatus(cfg *config.Config) fiber.Handler {
 		}
 		if endpointStatus == nil { // XXX: is this check necessary?
 			logr.Errorf("[api.EndpointStatus] Endpoint with key=%s not found", key)
+			return c.Status(404).SendString("not found")
+		}
+		if cfg.Security != nil && !cfg.Security.IsEndpointGroupAllowed(endpointStatus.Group) {
 			return c.Status(404).SendString("not found")
 		}
 		output, err := json.Marshal(endpointStatus)
