@@ -1,6 +1,8 @@
 package suite
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -286,12 +288,18 @@ func TestStoreResultValuesWithInvalidPath(t *testing.T) {
 }
 
 func TestSuite_ExecuteWithAlwaysRunEndpoints(t *testing.T) {
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("resource-id"))
+	}))
+	defer testServer.Close()
+
 	suite := &Suite{
 		Name: "test-suite",
 		Endpoints: []*endpoint.Endpoint{
 			{
 				Name: "create-resource",
-				URL:  "https://example.org",
+				URL:  testServer.URL,
 				Conditions: []endpoint.Condition{
 					endpoint.Condition("[STATUS] == 200"),
 				},
@@ -301,14 +309,14 @@ func TestSuite_ExecuteWithAlwaysRunEndpoints(t *testing.T) {
 			},
 			{
 				Name: "failing-endpoint",
-				URL:  "https://example.org",
+				URL:  testServer.URL,
 				Conditions: []endpoint.Condition{
 					endpoint.Condition("[STATUS] != 200"), // This will fail
 				},
 			},
 			{
 				Name: "cleanup-resource",
-				URL:  "https://example.org",
+				URL:  testServer.URL,
 				Conditions: []endpoint.Condition{
 					endpoint.Condition("[STATUS] == 200"),
 				},
@@ -344,26 +352,31 @@ func TestSuite_ExecuteWithAlwaysRunEndpoints(t *testing.T) {
 }
 
 func TestSuite_ExecuteWithoutAlwaysRunEndpoints(t *testing.T) {
+	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer testServer.Close()
+
 	suite := &Suite{
 		Name: "test-suite",
 		Endpoints: []*endpoint.Endpoint{
 			{
 				Name: "create-resource",
-				URL:  "https://example.org",
+				URL:  testServer.URL,
 				Conditions: []endpoint.Condition{
 					endpoint.Condition("[STATUS] == 200"),
 				},
 			},
 			{
 				Name: "failing-endpoint",
-				URL:  "https://example.org",
+				URL:  testServer.URL,
 				Conditions: []endpoint.Condition{
 					endpoint.Condition("[STATUS] != 200"), // This will fail
 				},
 			},
 			{
 				Name: "skipped-endpoint",
-				URL:  "https://example.org",
+				URL:  testServer.URL,
 				Conditions: []endpoint.Condition{
 					endpoint.Condition("[STATUS] == 200"),
 				},
