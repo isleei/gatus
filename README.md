@@ -388,6 +388,7 @@ Here are a few cases in which suites could be useful:
 | `suites[].interval`               | Duration to wait between suite executions.                                                          | `10m`         |
 | `suites[].timeout`                | Maximum duration for the entire suite execution.                                                    | `5m`          |
 | `suites[].context`                | Initial context values that can be referenced by endpoints.                                         | `{}`          |
+| `suites[].ui`                     | UI configuration defaults for all endpoints in the suite (same fields as `endpoints[].ui`).        | `{}`          |
 | `suites[].endpoints`              | List of endpoints to execute sequentially.                                                          | Required `[]` |
 | `suites[].endpoints[].store`      | Map of values to extract from the response and store in the suite context (stored even on failure). | `{}`          |
 | `suites[].endpoints[].always-run` | Whether to execute this endpoint even if previous endpoints in the suite failed.                    | `false`       |

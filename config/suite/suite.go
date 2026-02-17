@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/TwiN/gatus/v5/config/endpoint"
+	endpointui "github.com/TwiN/gatus/v5/config/endpoint/ui"
 	"github.com/TwiN/gatus/v5/config/gontext"
 	"github.com/TwiN/gatus/v5/config/key"
 )
@@ -52,6 +53,9 @@ type Suite struct {
 	// InitialContext holds initial values that can be referenced by endpoints
 	InitialContext map[string]interface{} `yaml:"context,omitempty"`
 
+	// UIConfig is the default UI configuration applied to endpoints in this suite
+	UIConfig *endpointui.Config `yaml:"ui,omitempty"`
+
 	// Endpoints in the suite (executed sequentially)
 	Endpoints []*endpoint.Endpoint `yaml:"endpoints"`
 }
@@ -76,6 +80,14 @@ func (s *Suite) ValidateAndSetDefaults() error {
 		return ErrSuiteWithNoName
 	}
 	// Validate endpoints
+	if s.UIConfig == nil {
+		s.UIConfig = endpointui.GetDefaultConfig()
+	} else {
+		if err := s.UIConfig.ValidateAndSetDefaults(); err != nil {
+			return err
+		}
+	}
+
 	if len(s.Endpoints) == 0 {
 		return ErrSuiteWithNoEndpoints
 	}
@@ -88,6 +100,9 @@ func (s *Suite) ValidateAndSetDefaults() error {
 		endpointNames[ep.Name] = true
 		// Suite endpoints inherit the group from the suite
 		ep.Group = s.Group
+		if ep.UIConfig == nil {
+			ep.UIConfig = s.UIConfig.Clone()
+		}
 		// Validate each endpoint
 		if err := ep.ValidateAndSetDefaults(); err != nil {
 			return fmt.Errorf("invalid endpoint '%s': %w", ep.Name, err)
