@@ -91,7 +91,13 @@ func (a *API) createRouter(cfg *config.Config) *fiber.App {
 	app.Get("/", SinglePageApplication(cfg.UI))
 	app.Get("/endpoints/:key", SinglePageApplication(cfg.UI))
 	app.Get("/suites/:key", SinglePageApplication(cfg.UI))
-	app.Get("/admin", SinglePageApplication(cfg.UI))
+	adminRouter := app.Group("/admin")
+	if cfg.Security != nil {
+		if err := cfg.Security.ApplySecurityMiddleware(adminRouter); err != nil {
+			panic(err)
+		}
+	}
+	adminRouter.Get("/", SinglePageApplication(cfg.UI))
 	// Health endpoint
 	healthHandler := health.Handler().WithJSON(true)
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -137,6 +143,7 @@ func (a *API) createRouter(cfg *config.Config) *fiber.App {
 	protectedAPIRouter.Get("/v1/admin/managed-config", GetManagedConfiguration(cfg))
 	protectedAPIRouter.Put("/v1/admin/managed-config", PutManagedConfiguration(cfg))
 	protectedAPIRouter.Delete("/v1/admin/managed-config", DeleteManagedConfiguration(cfg))
+	protectedAPIRouter.Post("/v1/admin/reload", TriggerImmediateConfigurationReload())
 	protectedAPIRouter.Get("/v1/admin/endpoints", GetManagedEndpoints(cfg))
 	protectedAPIRouter.Post("/v1/admin/endpoints", CreateManagedEndpoint(cfg))
 	protectedAPIRouter.Put("/v1/admin/endpoints/:key", UpdateManagedEndpoint(cfg))

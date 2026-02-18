@@ -229,9 +229,17 @@ func closeTunnels(cfg *config.Config) {
 
 func listenToConfigurationFileChanges(cfg *config.Config) {
 	watchInterval := getConfigurationWatchInterval()
+	ticker := time.NewTicker(watchInterval)
+	defer ticker.Stop()
 	for {
-		time.Sleep(watchInterval)
-		if cfg.HasLoadedConfigurationBeenModified() {
+		reloadRequested := false
+		select {
+		case <-ticker.C:
+		case <-config.ImmediateReloadRequests():
+			reloadRequested = true
+			logr.Info("[main.listenToConfigurationFileChanges] Immediate configuration reload has been requested")
+		}
+		if reloadRequested || cfg.HasLoadedConfigurationBeenModified() {
 			logr.Info("[main.listenToConfigurationFileChanges] Configuration file has been modified")
 			stop(cfg)
 			time.Sleep(time.Second) // Wait a bit to make sure everything is done.

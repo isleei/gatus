@@ -4,7 +4,7 @@
       <div class="mb-6">
         <Button variant="ghost" class="mb-4" @click="goBack">
           <ArrowLeft class="h-4 w-4 mr-2" />
-          Back to Dashboard
+          {{ t('common.backToDashboard') }}
         </Button>
         
         <div v-if="endpointStatus && endpointStatus.name" class="space-y-6">
@@ -12,7 +12,7 @@
             <div>
               <h1 class="text-4xl font-bold tracking-tight">{{ endpointStatus.name }}</h1>
               <div class="flex items-center gap-3 text-muted-foreground mt-2">
-                <span v-if="endpointStatus.group">Group: {{ endpointStatus.group }}</span>
+                <span v-if="endpointStatus.group">{{ t('endpointDetails.groupLabel', { group: endpointStatus.group }) }}</span>
                 <span v-if="endpointStatus.group && hostname">•</span>
                 <span v-if="hostname">{{ hostname }}</span>
               </div>
@@ -23,16 +23,16 @@
           <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader class="pb-2">
-                <CardTitle class="text-sm font-medium text-muted-foreground">Current Status</CardTitle>
+                <CardTitle class="text-sm font-medium text-muted-foreground">{{ t('endpointDetails.currentStatus') }}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div class="text-2xl font-bold">{{ currentHealthStatus === 'healthy' ? 'Operational' : 'Issues Detected' }}</div>
+                <div class="text-2xl font-bold">{{ currentHealthStatus === 'healthy' ? t('endpointDetails.operational') : t('endpointDetails.issuesDetected') }}</div>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader class="pb-2">
-                <CardTitle class="text-sm font-medium text-muted-foreground">Avg Response Time</CardTitle>
+                <CardTitle class="text-sm font-medium text-muted-foreground">{{ t('endpointDetails.avgResponseTime') }}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div class="text-2xl font-bold">{{ pageAverageResponseTime }}</div>
@@ -41,7 +41,7 @@
 
             <Card>
               <CardHeader class="pb-2">
-                <CardTitle class="text-sm font-medium text-muted-foreground">Response Time Range</CardTitle>
+                <CardTitle class="text-sm font-medium text-muted-foreground">{{ t('endpointDetails.responseTimeRange') }}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div class="text-2xl font-bold">{{ pageResponseTimeRange }}</div>
@@ -50,7 +50,7 @@
 
             <Card>
               <CardHeader class="pb-2">
-                <CardTitle class="text-sm font-medium text-muted-foreground">Last Check</CardTitle>
+                <CardTitle class="text-sm font-medium text-muted-foreground">{{ t('endpointDetails.lastCheck') }}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div class="text-2xl font-bold">{{ lastCheckTime }}</div>
@@ -61,13 +61,13 @@
           <Card>
             <CardHeader>
               <div class="flex items-center justify-between">
-                <CardTitle>Recent Checks</CardTitle>
+                <CardTitle>{{ t('endpointDetails.recentChecks') }}</CardTitle>
                 <div class="flex items-center gap-2">
                   <Button 
                     variant="ghost" 
                     size="icon"
                     @click="toggleShowAverageResponseTime"
-                    :title="showAverageResponseTime ? 'Show min-max response time' : 'Show average response time'"
+                    :title="showAverageResponseTime ? t('home.showMinMax') : t('home.showAverage')"
                   >
                     <Activity v-if="showAverageResponseTime" class="h-5 w-5" />
                     <Timer v-else class="h-5 w-5" />
@@ -76,7 +76,7 @@
                     variant="ghost" 
                     size="icon" 
                     @click="fetchData"
-                    title="Refresh data"
+                    :title="t('common.refreshData')"
                     :disabled="isRefreshing"
                   >
                     <RefreshCw :class="['h-4 w-4', isRefreshing && 'animate-spin']" />
@@ -105,14 +105,14 @@
             <Card>
               <CardHeader>
                 <div class="flex items-center justify-between">
-                  <CardTitle>Response Time Trend</CardTitle>
+                  <CardTitle>{{ t('endpointDetails.responseTimeTrend') }}</CardTitle>
                   <select 
                     v-model="selectedChartDuration"
                     class="text-sm bg-background border rounded-md px-3 py-1 focus:outline-none focus:ring-2 focus:ring-ring"
                   >
-                    <option value="24h">24 hours</option>
-                    <option value="7d">7 days</option>
-                    <option value="30d">30 days</option>
+                    <option value="24h">{{ t('endpointDetails.hours24') }}</option>
+                    <option value="7d">{{ t('endpointDetails.days7') }}</option>
+                    <option value="30d">{{ t('endpointDetails.days30') }}</option>
                   </select>
                 </div>
               </CardHeader>
@@ -131,11 +131,11 @@
               <Card v-for="period in ['30d', '7d', '24h', '1h']" :key="period">
                 <CardHeader class="pb-2">
                   <CardTitle class="text-sm font-medium text-muted-foreground text-center">
-                    {{ period === '30d' ? 'Last 30 days' : period === '7d' ? 'Last 7 days' : period === '24h' ? 'Last 24 hours' : 'Last hour' }}
+                    {{ period === '30d' ? t('endpointDetails.last30Days') : period === '7d' ? t('endpointDetails.last7Days') : period === '24h' ? t('endpointDetails.last24Hours') : t('endpointDetails.lastHour') }}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <img :src="generateResponseTimeBadgeImageURL(period)" :alt="`${period} response time`" class="mx-auto mt-2" />
+                  <img :src="generateResponseTimeBadgeImageURL(period)" :alt="t('endpointDetails.responseTimeAlt', { period })" class="mx-auto mt-2" />
                 </CardContent>
               </Card>
             </div>
@@ -143,15 +143,15 @@
 
           <Card>
             <CardHeader>
-              <CardTitle>Uptime Statistics</CardTitle>
+              <CardTitle>{{ t('endpointDetails.uptimeStatistics') }}</CardTitle>
             </CardHeader>
             <CardContent>
               <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <div v-for="period in ['30d', '7d', '24h', '1h']" :key="period" class="text-center">
                   <p class="text-sm text-muted-foreground mb-2">
-                    {{ period === '30d' ? 'Last 30 days' : period === '7d' ? 'Last 7 days' : period === '24h' ? 'Last 24 hours' : 'Last hour' }}
+                    {{ period === '30d' ? t('endpointDetails.last30Days') : period === '7d' ? t('endpointDetails.last7Days') : period === '24h' ? t('endpointDetails.last24Hours') : t('endpointDetails.lastHour') }}
                   </p>
-                  <img :src="generateUptimeBadgeImageURL(period)" :alt="`${period} uptime`" class="mx-auto" />
+                  <img :src="generateUptimeBadgeImageURL(period)" :alt="t('endpointDetails.uptimeAlt', { period })" class="mx-auto" />
                 </div>
               </div>
             </CardContent>
@@ -159,18 +159,18 @@
 
           <Card>
             <CardHeader>
-              <CardTitle>Current Health</CardTitle>
+              <CardTitle>{{ t('endpointDetails.currentHealth') }}</CardTitle>
             </CardHeader>
             <CardContent>
               <div class="text-center">
-                <img :src="generateHealthBadgeImageURL()" alt="health badge" class="mx-auto" />
+                <img :src="generateHealthBadgeImageURL()" :alt="t('endpointDetails.healthBadgeAlt')" class="mx-auto" />
               </div>
             </CardContent>
           </Card>
 
           <Card v-if="events && events.length > 0">
             <CardHeader>
-              <CardTitle>Events</CardTitle>
+              <CardTitle>{{ t('endpointDetails.events') }}</CardTitle>
             </CardHeader>
             <CardContent>
               <div class="space-y-4">
@@ -213,10 +213,12 @@ import Pagination from '@/components/Pagination.vue'
 import Loading from '@/components/Loading.vue'
 import ResponseTimeChart from '@/components/ResponseTimeChart.vue'
 import { generatePrettyTimeAgo, generatePrettyTimeDifference } from '@/utils/time'
+import { getCurrentLocale, useI18n } from '@/i18n'
 
 const router = useRouter()
 const route = useRoute()
 const emit = defineEmits(['showTooltip'])
+const { t } = useI18n()
 
 const endpointStatus = ref(null) // For paginated historical data
 const currentStatus = ref(null) // For current/latest status (always page 1)
@@ -253,7 +255,7 @@ const toggleShowAverageResponseTime = () => {
 const pageAverageResponseTime = computed(() => {
   // Use endpointStatus for current page's average response time
   if (!endpointStatus.value || !endpointStatus.value.results || endpointStatus.value.results.length === 0) {
-    return 'N/A'
+    return t('common.noData')
   }
   let total = 0
   let count = 0
@@ -263,14 +265,14 @@ const pageAverageResponseTime = computed(() => {
       count++
     }
   }
-  if (count === 0) return 'N/A'
+  if (count === 0) return t('common.noData')
   return `${Math.round(total / count / 1000000)}ms`
 })
 
 const pageResponseTimeRange = computed(() => {
   // Use endpointStatus for current page's response time range
   if (!endpointStatus.value || !endpointStatus.value.results || endpointStatus.value.results.length === 0) {
-    return 'N/A'
+    return t('common.noData')
   }
   let min = Infinity
   let max = 0
@@ -285,7 +287,7 @@ const pageResponseTimeRange = computed(() => {
     }
   }
   
-  if (!hasData) return 'N/A'
+  if (!hasData) return t('common.noData')
   const minMs = Math.trunc(min / 1000000)
   const maxMs = Math.trunc(max / 1000000)
   // If min and max are the same, show single value
@@ -298,7 +300,7 @@ const pageResponseTimeRange = computed(() => {
 const lastCheckTime = computed(() => {
   // Use currentStatus for real-time last check time
   if (!currentStatus.value || !currentStatus.value.results || currentStatus.value.results.length === 0) {
-    return 'Never'
+    return t('common.never')
   }
   return generatePrettyTimeAgo(currentStatus.value.results[currentStatus.value.results.length - 1].timestamp)
 })
@@ -326,24 +328,24 @@ const fetchData = async () => {
           let event = data.events[i]
           if (i === data.events.length - 1) {
             if (event.type === 'UNHEALTHY') {
-              event.fancyText = 'Endpoint is unhealthy'
+              event.fancyText = t('endpointDetails.endpointIsUnhealthy')
             } else if (event.type === 'HEALTHY') {
-              event.fancyText = 'Endpoint is healthy'
+              event.fancyText = t('endpointDetails.endpointIsHealthy')
             } else if (event.type === 'START') {
-              event.fancyText = 'Monitoring started'
+              event.fancyText = t('endpointDetails.monitoringStarted')
             }
           } else {
             let nextEvent = data.events[i + 1]
             if (event.type === 'HEALTHY') {
-              event.fancyText = 'Endpoint became healthy'
+              event.fancyText = t('endpointDetails.endpointBecameHealthy')
             } else if (event.type === 'UNHEALTHY') {
               if (nextEvent) {
-                event.fancyText = 'Endpoint was unhealthy for ' + generatePrettyTimeDifference(nextEvent.timestamp, event.timestamp)
+                event.fancyText = t('endpointDetails.endpointWasUnhealthyFor', { duration: generatePrettyTimeDifference(nextEvent.timestamp, event.timestamp) })
               } else {
-                event.fancyText = 'Endpoint became unhealthy'
+                event.fancyText = t('endpointDetails.endpointBecameUnhealthy')
               }
             } else if (event.type === 'START') {
-              event.fancyText = 'Monitoring started'
+              event.fancyText = t('endpointDetails.monitoringStarted')
             }
           }
           event.fancyTimeAgo = generatePrettyTimeAgo(event.timestamp)
@@ -384,7 +386,7 @@ const showTooltip = (result, event, action = 'hover') => {
 }
 
 const prettifyTimestamp = (timestamp) => {
-  return new Date(timestamp).toLocaleString()
+  return new Date(timestamp).toLocaleString(getCurrentLocale())
 }
 
 const generateHealthBadgeImageURL = () => {

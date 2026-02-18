@@ -1,18 +1,18 @@
 <template>
   <div class="container mx-auto px-4 py-8 max-w-7xl">
     <div class="mb-6">
-      <h1 class="text-3xl font-bold tracking-tight">Monitor Management</h1>
+      <h1 class="text-3xl font-bold tracking-tight">{{ t('admin.title') }}</h1>
       <p class="text-muted-foreground mt-2">
-        Endpoints and notification channels are now UI-driven. Suites and external endpoints can still be managed via the JSON overlay editor below.
+        {{ t('admin.subtitle') }}
       </p>
     </div>
 
     <div class="p-4 rounded-lg border bg-card mb-6">
       <p class="text-sm">
-        <span class="font-semibold">Overlay Path:</span> {{ overlayPath || 'N/A' }}
+        <span class="font-semibold">{{ t('admin.overlayPath') }}</span> {{ overlayPath || t('common.noData') }}
       </p>
       <p class="text-muted-foreground text-sm mt-1">
-        Saved changes are auto-applied by Gatus within a few seconds.
+        {{ t('admin.autoAppliedHint') }}
       </p>
     </div>
 
@@ -20,16 +20,16 @@
       <Card>
         <CardHeader>
           <div class="flex items-center justify-between gap-2">
-            <CardTitle>Endpoints</CardTitle>
+            <CardTitle>{{ t('common.endpoints') }}</CardTitle>
             <div class="flex items-center gap-2">
-              <Button variant="outline" size="sm" @click="startCreate" :disabled="savingEndpoint">New</Button>
-              <Button variant="outline" size="sm" @click="loadEndpoints" :disabled="loadingEndpoints || savingEndpoint">Refresh</Button>
+              <Button variant="outline" size="sm" @click="startCreate" :disabled="savingEndpoint">{{ t('admin.new') }}</Button>
+              <Button variant="outline" size="sm" @click="loadEndpoints" :disabled="loadingEndpoints || savingEndpoint">{{ t('common.refresh') }}</Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <p v-if="loadingEndpoints" class="text-sm text-muted-foreground">Loading endpoints...</p>
-          <p v-else-if="endpoints.length === 0" class="text-sm text-muted-foreground">No endpoint found in the managed configuration.</p>
+          <p v-if="loadingEndpoints" class="text-sm text-muted-foreground">{{ t('admin.loadingEndpoints') }}</p>
+          <p v-else-if="endpoints.length === 0" class="text-sm text-muted-foreground">{{ t('admin.noEndpoints') }}</p>
           <div v-else class="space-y-2">
             <button
               v-for="endpoint in endpoints"
@@ -43,7 +43,7 @@
                 <span class="text-xs text-muted-foreground uppercase">{{ endpoint.type }}</span>
               </div>
               <p class="text-xs text-muted-foreground truncate mt-1">{{ endpoint.url }}</p>
-              <p class="text-xs text-muted-foreground mt-1">Key: {{ endpoint.key }}</p>
+              <p class="text-xs text-muted-foreground mt-1">{{ t('admin.endpointKey', { key: endpoint.key }) }}</p>
             </button>
           </div>
         </CardContent>
@@ -51,35 +51,35 @@
 
       <Card>
         <CardHeader>
-          <CardTitle>{{ isEditing ? `Edit Endpoint: ${selectedKey}` : 'Create Endpoint' }}</CardTitle>
+          <CardTitle>{{ isEditing ? t('admin.editEndpoint', { key: selectedKey }) : t('admin.createEndpoint') }}</CardTitle>
         </CardHeader>
         <CardContent class="space-y-4">
           <div class="grid gap-4 md:grid-cols-2">
             <div class="space-y-1">
-              <label class="text-sm font-medium">Name</label>
+              <label class="text-sm font-medium">{{ t('common.name') }}</label>
               <Input v-model="form.name" placeholder="frontend" />
             </div>
             <div class="space-y-1">
-              <label class="text-sm font-medium">Group</label>
+              <label class="text-sm font-medium">{{ t('common.group') }}</label>
               <Input v-model="form.group" placeholder="core" />
             </div>
             <div class="space-y-1 md:col-span-2">
-              <label class="text-sm font-medium">URL</label>
+              <label class="text-sm font-medium">{{ t('common.url') }}</label>
               <Input v-model="form.url" placeholder="https://example.org/health" />
             </div>
             <div class="space-y-1">
-              <label class="text-sm font-medium">Method</label>
+              <label class="text-sm font-medium">{{ t('common.method') }}</label>
               <Select v-model="form.method" :options="methodOptions" />
             </div>
             <div class="space-y-1">
-              <label class="text-sm font-medium">Interval</label>
+              <label class="text-sm font-medium">{{ t('common.interval') }}</label>
               <Input v-model="form.interval" placeholder="30s / 1m / 5m" />
             </div>
           </div>
 
           <div class="grid gap-4 md:grid-cols-2">
             <div class="space-y-1">
-              <label class="text-sm font-medium">Conditions (one per line)</label>
+              <label class="text-sm font-medium">{{ t('admin.conditionsOnePerLine') }}</label>
               <textarea
                 v-model="form.conditionsText"
                 class="w-full min-h-[180px] rounded-md border bg-background p-3 text-sm font-mono"
@@ -87,7 +87,7 @@
               />
             </div>
             <div class="space-y-1">
-              <label class="text-sm font-medium">Headers (Key: Value)</label>
+              <label class="text-sm font-medium">{{ t('admin.headersKeyValue') }}</label>
               <textarea
                 v-model="form.headersText"
                 class="w-full min-h-[180px] rounded-md border bg-background p-3 text-sm font-mono"
@@ -98,7 +98,7 @@
           </div>
 
           <div class="space-y-1">
-            <label class="text-sm font-medium">Body</label>
+            <label class="text-sm font-medium">{{ t('common.body') }}</label>
             <textarea
               v-model="form.body"
               class="w-full min-h-[120px] rounded-md border bg-background p-3 text-sm font-mono"
@@ -109,26 +109,26 @@
           <div class="flex flex-wrap items-center gap-4">
             <label class="inline-flex items-center gap-2 text-sm">
               <input v-model="form.enabled" type="checkbox" class="h-4 w-4 rounded border-input" />
-              Enabled
+              {{ t('admin.enabled') }}
             </label>
             <label class="inline-flex items-center gap-2 text-sm">
               <input v-model="form.graphql" type="checkbox" class="h-4 w-4 rounded border-input" />
-              GraphQL Body
+              {{ t('admin.graphqlBody') }}
             </label>
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
             <Button @click="saveEndpoint" :disabled="savingEndpoint || loadingEndpoints">
-              {{ isEditing ? 'Save Endpoint' : 'Create Endpoint' }}
+              {{ isEditing ? t('admin.saveEndpoint') : t('admin.createEndpointAction') }}
             </Button>
-            <Button variant="outline" @click="startCreate" :disabled="savingEndpoint">Clear</Button>
+            <Button variant="outline" @click="startCreate" :disabled="savingEndpoint">{{ t('admin.clear') }}</Button>
             <Button
               v-if="isEditing"
               variant="destructive"
               @click="deleteEndpoint"
               :disabled="savingEndpoint"
             >
-              Delete Endpoint
+              {{ t('admin.deleteEndpoint') }}
             </Button>
             <span v-if="endpointMessage" class="text-sm text-muted-foreground">{{ endpointMessage }}</span>
           </div>
@@ -139,15 +139,15 @@
     <Card class="mt-6">
       <CardHeader>
         <div class="flex items-center justify-between gap-2">
-          <CardTitle>Notification Channels</CardTitle>
-          <Button variant="outline" size="sm" @click="loadNotifications" :disabled="loadingNotifications || savingNotification">Refresh</Button>
+          <CardTitle>{{ t('admin.notificationChannels') }}</CardTitle>
+          <Button variant="outline" size="sm" @click="loadNotifications" :disabled="loadingNotifications || savingNotification">{{ t('common.refresh') }}</Button>
         </div>
       </CardHeader>
       <CardContent>
         <div class="grid gap-6 lg:grid-cols-[22rem,1fr]">
           <div class="space-y-2">
-            <p v-if="loadingNotifications" class="text-sm text-muted-foreground">Loading notifications...</p>
-            <p v-else-if="notifications.length === 0" class="text-sm text-muted-foreground">No notification provider type available.</p>
+            <p v-if="loadingNotifications" class="text-sm text-muted-foreground">{{ t('admin.loadingNotifications') }}</p>
+            <p v-else-if="notifications.length === 0" class="text-sm text-muted-foreground">{{ t('admin.noNotificationProvider') }}</p>
             <button
               v-for="notification in notifications"
               :key="notification.type"
@@ -158,24 +158,24 @@
               <div class="flex items-center justify-between gap-2">
                 <p class="font-medium truncate">{{ notification.type }}</p>
                 <span class="text-xs" :class="notification.configured ? 'text-green-600' : 'text-muted-foreground'">
-                  {{ notification.configured ? 'Configured' : 'Not Configured' }}
+                  {{ notification.configured ? t('admin.configured') : t('admin.notConfigured') }}
                 </span>
               </div>
               <p class="text-xs text-muted-foreground mt-1">
-                Used by {{ notification.usedByEndpoints }} endpoint(s), {{ notification.usedByExternalEndpoints }} external endpoint(s)
+                {{ t('admin.usedBy', { endpoints: notification.usedByEndpoints, externalEndpoints: notification.usedByExternalEndpoints }) }}
               </p>
             </button>
           </div>
 
           <div class="space-y-3">
-            <p v-if="!selectedNotification" class="text-sm text-muted-foreground">Select a notification type from the left panel.</p>
+            <p v-if="!selectedNotification" class="text-sm text-muted-foreground">{{ t('admin.selectNotificationType') }}</p>
             <template v-else>
               <div class="space-y-1">
-                <label class="text-sm font-medium">Type</label>
+                <label class="text-sm font-medium">{{ t('common.type') }}</label>
                 <Input :model-value="selectedNotification.type" disabled />
               </div>
               <div class="space-y-1">
-                <label class="text-sm font-medium">Provider Config (JSON)</label>
+                <label class="text-sm font-medium">{{ t('admin.providerConfigJson') }}</label>
                 <textarea
                   v-model="notificationConfigText"
                   class="w-full min-h-[240px] rounded-md border bg-background p-3 text-sm font-mono"
@@ -183,13 +183,13 @@
                 />
               </div>
               <div class="flex flex-wrap items-center gap-2">
-                <Button @click="saveNotification" :disabled="savingNotification || loadingNotifications">Save Notification</Button>
+                <Button @click="saveNotification" :disabled="savingNotification || loadingNotifications">{{ t('admin.saveNotification') }}</Button>
                 <Button
                   variant="destructive"
                   @click="deleteNotification"
                   :disabled="savingNotification || !selectedNotification.configured"
                 >
-                  Delete Notification
+                  {{ t('admin.deleteNotification') }}
                 </Button>
                 <span v-if="notificationMessage" class="text-sm text-muted-foreground">{{ notificationMessage }}</span>
               </div>
@@ -202,11 +202,12 @@
     <Card class="mt-6">
       <CardHeader>
         <div class="flex items-center justify-between gap-2">
-          <CardTitle>Advanced JSON Overlay</CardTitle>
+          <CardTitle>{{ t('admin.advancedJsonOverlay') }}</CardTitle>
           <div class="flex items-center gap-2">
-            <Button variant="outline" size="sm" @click="loadManagedConfig" :disabled="loadingManaged || savingManaged">Reload</Button>
-            <Button size="sm" @click="saveManagedConfig" :disabled="loadingManaged || savingManaged">Save Overlay</Button>
-            <Button variant="destructive" size="sm" @click="resetOverlay" :disabled="loadingManaged || savingManaged">Reset Overlay</Button>
+            <Button variant="outline" size="sm" @click="loadManagedConfig" :disabled="loadingManaged || savingManaged || applyingManaged">{{ t('admin.reload') }}</Button>
+            <Button size="sm" @click="saveManagedConfig" :disabled="loadingManaged || savingManaged || applyingManaged">{{ t('admin.saveOverlay') }}</Button>
+            <Button variant="secondary" size="sm" @click="applyManagedConfig" :disabled="loadingManaged || savingManaged || applyingManaged">{{ t('admin.applyNow') }}</Button>
+            <Button variant="destructive" size="sm" @click="resetOverlay" :disabled="loadingManaged || savingManaged || applyingManaged">{{ t('admin.resetOverlay') }}</Button>
           </div>
         </div>
       </CardHeader>
@@ -228,6 +229,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const endpoints = ref([])
 const selectedKey = ref('')
@@ -246,6 +250,7 @@ const notificationMessage = ref('')
 
 const loadingManaged = ref(false)
 const savingManaged = ref(false)
+const applyingManaged = ref(false)
 const managedMessage = ref('')
 const jsonText = ref('')
 
@@ -313,12 +318,12 @@ const parseHeadersText = (headersText) => {
     if (!line) continue
     const separatorIndex = line.indexOf(':')
     if (separatorIndex < 1) {
-      throw new Error(`Invalid header format: ${line}`)
+      throw new Error(t('admin.invalidHeader', { line }))
     }
     const name = line.slice(0, separatorIndex).trim()
     const value = line.slice(separatorIndex + 1).trim()
     if (!name) {
-      throw new Error(`Invalid header name in line: ${line}`)
+      throw new Error(t('admin.invalidHeaderName', { line }))
     }
     headers[name] = value
   }
@@ -333,10 +338,10 @@ const buildPayloadFromForm = () => {
     .map((condition) => condition.trim())
     .filter((condition) => condition.length > 0)
   if (!name || !url) {
-    throw new Error('Name and URL are required.')
+    throw new Error(t('admin.nameUrlRequired'))
   }
   if (conditions.length === 0) {
-    throw new Error('At least one condition is required.')
+    throw new Error(t('admin.atLeastOneCondition'))
   }
   return {
     enabled: form.value.enabled,
@@ -380,7 +385,7 @@ const loadEndpoints = async () => {
     })
     const data = await response.json()
     if (!response.ok) {
-      throw new Error(data.error || 'Failed to load endpoints')
+      throw new Error(data.error || t('admin.failedLoadEndpoints'))
     }
     endpoints.value = Array.isArray(data.endpoints) ? data.endpoints : []
     overlayPath.value = data.overlayPath || overlayPath.value
@@ -416,11 +421,11 @@ const saveEndpoint = async () => {
     })
     const data = await response.json()
     if (!response.ok) {
-      throw new Error(data.error || 'Failed to save endpoint')
+      throw new Error(data.error || t('admin.failedSaveEndpoint'))
     }
     selectedKey.value = data.key || selectedKey.value
     await loadEndpoints()
-    endpointMessage.value = isEditing.value ? 'Endpoint saved.' : 'Endpoint created.'
+    endpointMessage.value = isEditing.value ? t('admin.endpointSaved') : t('admin.endpointCreated')
   } catch (error) {
     endpointMessage.value = error.message
   } finally {
@@ -430,7 +435,7 @@ const saveEndpoint = async () => {
 
 const deleteEndpoint = async () => {
   if (!isEditing.value) return
-  const confirmed = window.confirm(`Delete endpoint ${selectedKey.value}?`)
+  const confirmed = window.confirm(t('admin.confirmDeleteEndpoint', { key: selectedKey.value }))
   if (!confirmed) return
   savingEndpoint.value = true
   endpointMessage.value = ''
@@ -440,7 +445,7 @@ const deleteEndpoint = async () => {
       credentials: 'include',
     })
     if (!response.ok && response.status !== 204) {
-      let message = 'Failed to delete endpoint'
+      let message = t('admin.failedDeleteEndpoint')
       try {
         const data = await response.json()
         message = data.error || message
@@ -451,7 +456,7 @@ const deleteEndpoint = async () => {
     }
     startCreate()
     await loadEndpoints()
-    endpointMessage.value = 'Endpoint deleted.'
+    endpointMessage.value = t('admin.endpointDeleted')
   } catch (error) {
     endpointMessage.value = error.message
   } finally {
@@ -468,7 +473,7 @@ const loadNotifications = async () => {
     })
     const data = await response.json()
     if (!response.ok) {
-      throw new Error(data.error || 'Failed to load notifications')
+      throw new Error(data.error || t('admin.failedLoadNotifications'))
     }
     notifications.value = Array.isArray(data.notifications) ? data.notifications : []
     overlayPath.value = data.overlayPath || overlayPath.value
@@ -494,7 +499,7 @@ const loadNotifications = async () => {
 
 const saveNotification = async () => {
   if (!selectedNotification.value) {
-    notificationMessage.value = 'Please select a notification type first.'
+    notificationMessage.value = t('admin.selectNotificationFirst')
     return
   }
   savingNotification.value = true
@@ -502,7 +507,7 @@ const saveNotification = async () => {
   try {
     const parsed = JSON.parse(notificationConfigText.value || '{}')
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error('Notification config must be a JSON object.')
+      throw new Error(t('admin.notificationConfigJsonObject'))
     }
     const response = await fetch(`/api/v1/admin/notifications/${selectedNotification.value.type}`, {
       method: 'PUT',
@@ -514,7 +519,7 @@ const saveNotification = async () => {
     })
     const data = await response.json()
     if (!response.ok) {
-      throw new Error(data.error || 'Failed to save notification')
+      throw new Error(data.error || t('admin.failedSaveNotification'))
     }
     const currentType = selectedNotification.value.type
     await loadNotifications()
@@ -522,7 +527,7 @@ const saveNotification = async () => {
     if (selected) {
       selectNotification(selected)
     }
-    notificationMessage.value = 'Notification saved.'
+    notificationMessage.value = t('admin.notificationSaved')
   } catch (error) {
     notificationMessage.value = error.message
   } finally {
@@ -534,7 +539,7 @@ const deleteNotification = async () => {
   if (!selectedNotification.value || !selectedNotification.value.configured) {
     return
   }
-  const confirmed = window.confirm(`Delete notification type ${selectedNotification.value.type}?`)
+  const confirmed = window.confirm(t('admin.confirmDeleteNotification', { type: selectedNotification.value.type }))
   if (!confirmed) return
   savingNotification.value = true
   notificationMessage.value = ''
@@ -544,7 +549,7 @@ const deleteNotification = async () => {
       credentials: 'include',
     })
     if (!response.ok && response.status !== 204) {
-      let message = 'Failed to delete notification'
+      let message = t('admin.failedDeleteNotification')
       try {
         const data = await response.json()
         message = data.error || message
@@ -554,7 +559,7 @@ const deleteNotification = async () => {
       throw new Error(message)
     }
     await loadNotifications()
-    notificationMessage.value = 'Notification deleted.'
+    notificationMessage.value = t('admin.notificationDeleted')
   } catch (error) {
     notificationMessage.value = error.message
   } finally {
@@ -571,7 +576,7 @@ const loadManagedConfig = async () => {
     })
     const data = await response.json()
     if (!response.ok) {
-      throw new Error(data.error || 'Failed to load managed configuration')
+      throw new Error(data.error || t('admin.failedLoadManagedConfig'))
     }
     overlayPath.value = data.overlayPath || overlayPath.value
     jsonText.value = JSON.stringify(normalizePayload(data), null, 2)
@@ -598,10 +603,10 @@ const saveManagedConfig = async () => {
     })
     const data = await response.json()
     if (!response.ok) {
-      throw new Error(data.error || 'Failed to save managed configuration')
+      throw new Error(data.error || t('admin.failedSaveManagedConfig'))
     }
     overlayPath.value = data.overlayPath || overlayPath.value
-    managedMessage.value = data.message || 'Overlay saved.'
+    managedMessage.value = data.message || t('admin.overlaySaved')
     await Promise.all([loadEndpoints(), loadNotifications()])
   } catch (error) {
     managedMessage.value = error.message
@@ -610,8 +615,29 @@ const saveManagedConfig = async () => {
   }
 }
 
+const applyManagedConfig = async () => {
+  applyingManaged.value = true
+  managedMessage.value = ''
+  try {
+    const response = await fetch('/api/v1/admin/reload', {
+      method: 'POST',
+      credentials: 'include',
+    })
+    const data = await response.json()
+    if (!response.ok) {
+      throw new Error(data.error || t('admin.failedApplyImmediately'))
+    }
+    managedMessage.value = data.message || t('admin.immediateReloadRequested')
+    await Promise.all([loadEndpoints(), loadNotifications()])
+  } catch (error) {
+    managedMessage.value = error.message
+  } finally {
+    applyingManaged.value = false
+  }
+}
+
 const resetOverlay = async () => {
-  const confirmed = window.confirm('Delete managed overlay and revert to base YAML configuration?')
+  const confirmed = window.confirm(t('admin.confirmResetOverlay'))
   if (!confirmed) return
   savingManaged.value = true
   managedMessage.value = ''
@@ -621,7 +647,7 @@ const resetOverlay = async () => {
       credentials: 'include',
     })
     if (!response.ok && response.status !== 204) {
-      let message = 'Failed to reset overlay'
+      let message = t('admin.failedResetOverlay')
       try {
         const data = await response.json()
         message = data.error || message
@@ -630,7 +656,7 @@ const resetOverlay = async () => {
       }
       throw new Error(message)
     }
-    managedMessage.value = 'Overlay deleted. Base YAML configuration will be active after reload.'
+    managedMessage.value = t('admin.overlayDeletedHint')
     startCreate()
     await Promise.all([loadEndpoints(), loadNotifications(), loadManagedConfig()])
   } catch (error) {

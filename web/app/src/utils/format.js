@@ -1,10 +1,12 @@
+import { translate } from '@/i18n'
+
 /**
  * Formats a duration from nanoseconds to a human-readable string
  * @param {number} duration - Duration in nanoseconds
  * @returns {string} Formatted duration string (e.g., "123ms", "1.23s")
  */
 export const formatDuration = (duration) => {
-  if (!duration && duration !== 0) return 'N/A'
+  if (!duration && duration !== 0) return translate('common.noData')
   
   // Convert nanoseconds to milliseconds
   const durationMs = duration / 1000000

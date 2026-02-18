@@ -36,7 +36,7 @@
                 <div>
                   <h1 class="text-2xl font-bold tracking-tight">{{ header }}</h1>
                   <p v-if="buttons && buttons.length" class="text-sm text-muted-foreground">
-                    System Monitoring Dashboard
+                    {{ t('app.systemMonitoringDashboard') }}
                   </p>
                 </div>
               </component>
@@ -44,13 +44,22 @@
 
             <!-- Right Side Actions -->
             <div class="flex items-center gap-2">
+              <select
+                :value="locale"
+                @change="setLocale($event.target.value)"
+                :aria-label="t('locale.label')"
+                class="hidden md:block h-9 rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="zh-CN">{{ t('locale.chinese') }}</option>
+                <option value="en-US">{{ t('locale.english') }}</option>
+              </select>
               <!-- Navigation Links (Desktop) -->
               <nav class="hidden md:flex items-center gap-1">
                 <router-link
                   to="/admin"
                   class="px-3 py-2 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
                 >
-                  Admin
+                  {{ t('common.admin') }}
                 </router-link>
                 <a 
                   v-for="button in buttons" 
@@ -81,12 +90,23 @@
             v-if="mobileMenuOpen" 
             class="md:hidden mt-4 pt-4 border-t space-y-1"
           >
+            <div class="px-3 pb-3">
+              <label class="block text-xs text-muted-foreground mb-1">{{ t('locale.label') }}</label>
+              <select
+                :value="locale"
+                @change="setLocale($event.target.value)"
+                class="w-full h-9 rounded-md border bg-background px-2 text-sm"
+              >
+                <option value="zh-CN">{{ t('locale.chinese') }}</option>
+                <option value="en-US">{{ t('locale.english') }}</option>
+              </select>
+            </div>
             <router-link
               to="/admin"
               class="block px-3 py-2 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
               @click="mobileMenuOpen = false"
             >
-              Admin
+              {{ t('common.admin') }}
             </router-link>
             <a 
               v-for="button in buttons" 
@@ -112,7 +132,7 @@
         <div class="container mx-auto px-4 py-6 max-w-7xl">
           <div class="flex flex-col items-center gap-4">
             <div class="text-sm text-muted-foreground text-center">
-              Powered by <a href="https://gatus.io" target="_blank" class="font-medium text-emerald-800 hover:text-emerald-600">Gatus</a>
+              {{ t('app.poweredBy') }} <a href="https://gatus.io" target="_blank" class="font-medium text-emerald-800 hover:text-emerald-600">Gatus</a>
             </div>
             <Social />
           </div>
@@ -130,14 +150,14 @@
             class="w-20 h-20 mx-auto mb-4"
           />
           <CardTitle class="text-3xl">Gatus</CardTitle>
-          <p class="text-muted-foreground mt-2">System Monitoring Dashboard</p>
+          <p class="text-muted-foreground mt-2">{{ t('app.systemMonitoringDashboard') }}</p>
         </CardHeader>
         <CardContent>
           <div v-if="route && route.query.error" class="mb-6">
             <div class="p-3 rounded-md bg-destructive/10 border border-destructive/20">
               <p class="text-sm text-destructive text-center">
                 <span v-if="route.query.error === 'access_denied'">
-                  You do not have access to this status page
+                  {{ t('app.noAccess') }}
                 </span>
                 <span v-else>{{ route.query.error }}</span>
               </p>
@@ -152,7 +172,7 @@
             <Loading v-if="isOidcLoading" size="xs" />
             <template v-else>
               <LogIn class="mr-2 h-4 w-4" />
-              Login with OIDC
+              {{ t('app.loginWithOidc') }}
             </template>
           </a>
         </CardContent>
@@ -173,8 +193,10 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import Social from './components/Social.vue'
 import Tooltip from './components/Tooltip.vue'
 import Loading from './components/Loading.vue'
+import { useI18n } from '@/i18n'
 
 const route = useRoute()
+const { t, locale, setLocale } = useI18n()
 
 // State
 const retrievedConfig = ref(false)

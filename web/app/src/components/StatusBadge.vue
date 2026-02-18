@@ -8,6 +8,7 @@
 <script setup>
 import { computed } from 'vue'
 import { Badge } from '@/components/ui/badge'
+import { useI18n } from '@/i18n'
 
 const props = defineProps({
   status: {
@@ -16,6 +17,8 @@ const props = defineProps({
     validator: (value) => ['healthy', 'unhealthy', 'degraded', 'unknown'].includes(value)
   }
 })
+
+const { t } = useI18n()
 
 const variant = computed(() => {
   switch (props.status) {
@@ -33,13 +36,13 @@ const variant = computed(() => {
 const label = computed(() => {
   switch (props.status) {
     case 'healthy':
-      return 'Healthy'
+      return t('common.healthy')
     case 'unhealthy':
-      return 'Unhealthy'
+      return t('common.unhealthy')
     case 'degraded':
-      return 'Degraded'
+      return t('common.degraded')
     default:
-      return 'Unknown'
+      return t('common.unknown')
   }
 })
 

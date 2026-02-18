@@ -3,12 +3,12 @@
     <div class="flex-1">
       <div class="relative">
         <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <label for="search-input" class="sr-only">Search endpoints</label>
+        <label for="search-input" class="sr-only">{{ t('search.searchEndpoints') }}</label>
         <Input
           id="search-input"
           v-model="searchQuery"
           type="text"
-          placeholder="Search endpoints..."
+          :placeholder="t('search.placeholder')"
           class="pl-10 text-sm sm:text-base"
           @input="$emit('search', searchQuery)"
         />
@@ -16,22 +16,22 @@
     </div>
     <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
       <div class="flex items-center gap-2 flex-1 sm:flex-initial">
-        <label class="text-xs sm:text-sm font-medium text-muted-foreground whitespace-nowrap">Filter by:</label>
+        <label class="text-xs sm:text-sm font-medium text-muted-foreground whitespace-nowrap">{{ t('search.filterBy') }}</label>
         <Select 
           v-model="filterBy" 
           :options="filterOptions"
-          placeholder="None"
+          :placeholder="t('search.none')"
           class="flex-1 sm:w-[140px] md:w-[160px]"
           @update:model-value="handleFilterChange"
         />
       </div>
       
       <div class="flex items-center gap-2 flex-1 sm:flex-initial">
-        <label class="text-xs sm:text-sm font-medium text-muted-foreground whitespace-nowrap">Sort by:</label>
+        <label class="text-xs sm:text-sm font-medium text-muted-foreground whitespace-nowrap">{{ t('search.sortBy') }}</label>
         <Select 
           v-model="sortBy" 
           :options="sortOptions"
-          placeholder="Name"
+          :placeholder="t('search.name')"
           class="flex-1 sm:w-[90px] md:w-[100px]"
           @update:model-value="handleSortChange"
         />
@@ -41,26 +41,29 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { Search } from 'lucide-vue-next'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const searchQuery = ref('')
 const filterBy = ref(localStorage.getItem('gatus:filter-by') || (typeof window !== 'undefined' && window.config?.defaultFilterBy) || 'none')
 const sortBy = ref(localStorage.getItem('gatus:sort-by') || (typeof window !== 'undefined' && window.config?.defaultSortBy) || 'name')
 
-const filterOptions = [
-  { label: 'None', value: 'none' },
-  { label: 'Failing', value: 'failing' },
-  { label: 'Unstable', value: 'unstable' }
-]
+const filterOptions = computed(() => [
+  { label: t('search.none'), value: 'none' },
+  { label: t('search.failing'), value: 'failing' },
+  { label: t('search.unstable'), value: 'unstable' },
+])
 
-const sortOptions = [
-  { label: 'Name', value: 'name' },
-  { label: 'Group', value: 'group' },
-  { label: 'Health', value: 'health' }
-]
+const sortOptions = computed(() => [
+  { label: t('search.name'), value: 'name' },
+  { label: t('search.group'), value: 'group' },
+  { label: t('search.health'), value: 'health' },
+])
 
 const emit = defineEmits(['search', 'update:showOnlyFailing', 'update:showRecentFailures', 'update:groupByGroup', 'update:sortBy', 'initializeCollapsedGroups'])
 
