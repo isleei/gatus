@@ -45,6 +45,7 @@ import (
 	"github.com/TwiN/gatus/v5/alerting/provider/twilio"
 	"github.com/TwiN/gatus/v5/alerting/provider/vonage"
 	"github.com/TwiN/gatus/v5/alerting/provider/webex"
+	"github.com/TwiN/gatus/v5/alerting/provider/wecom"
 	"github.com/TwiN/gatus/v5/alerting/provider/zapier"
 	"github.com/TwiN/gatus/v5/alerting/provider/zulip"
 	"github.com/TwiN/logr"
@@ -168,6 +169,9 @@ type Config struct {
 
 	// Webex is the configuration for the webex alerting provider
 	Webex *webex.AlertProvider `yaml:"webex,omitempty"`
+
+	// WeCom is the configuration for the wecom alerting provider
+	WeCom *wecom.AlertProvider `yaml:"wecom,omitempty"`
 
 	// Zapier is the configuration for the zapier alerting provider
 	Zapier *zapier.AlertProvider `yaml:"zapier,omitempty"`

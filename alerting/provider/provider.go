@@ -40,6 +40,7 @@ import (
 	"github.com/TwiN/gatus/v5/alerting/provider/telegram"
 	"github.com/TwiN/gatus/v5/alerting/provider/twilio"
 	"github.com/TwiN/gatus/v5/alerting/provider/webex"
+	"github.com/TwiN/gatus/v5/alerting/provider/wecom"
 	"github.com/TwiN/gatus/v5/alerting/provider/zapier"
 	"github.com/TwiN/gatus/v5/alerting/provider/zulip"
 	"github.com/TwiN/gatus/v5/config/endpoint"
@@ -130,6 +131,7 @@ var (
 	_ AlertProvider = (*telegram.AlertProvider)(nil)
 	_ AlertProvider = (*twilio.AlertProvider)(nil)
 	_ AlertProvider = (*webex.AlertProvider)(nil)
+	_ AlertProvider = (*wecom.AlertProvider)(nil)
 	_ AlertProvider = (*zapier.AlertProvider)(nil)
 	_ AlertProvider = (*zulip.AlertProvider)(nil)
 
@@ -172,6 +174,7 @@ var (
 	_ Config[telegram.Config]       = (*telegram.Config)(nil)
 	_ Config[twilio.Config]         = (*twilio.Config)(nil)
 	_ Config[webex.Config]          = (*webex.Config)(nil)
+	_ Config[wecom.Config]          = (*wecom.Config)(nil)
 	_ Config[zapier.Config]         = (*zapier.Config)(nil)
 	_ Config[zulip.Config]          = (*zulip.Config)(nil)
 )

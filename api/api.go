@@ -91,6 +91,7 @@ func (a *API) createRouter(cfg *config.Config) *fiber.App {
 	app.Get("/", SinglePageApplication(cfg.UI))
 	app.Get("/endpoints/:key", SinglePageApplication(cfg.UI))
 	app.Get("/suites/:key", SinglePageApplication(cfg.UI))
+	app.Get("/admin", SinglePageApplication(cfg.UI))
 	// Health endpoint
 	healthHandler := health.Handler().WithJSON(true)
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -133,5 +134,15 @@ func (a *API) createRouter(cfg *config.Config) *fiber.App {
 	protectedAPIRouter.Get("/v1/suites/statuses", SuiteStatuses(cfg))
 	protectedAPIRouter.Get("/v1/suites/:key/statuses", SuiteStatus(cfg))
 	protectedAPIRouter.Get("/v1/groups", Groups(cfg))
+	protectedAPIRouter.Get("/v1/admin/managed-config", GetManagedConfiguration(cfg))
+	protectedAPIRouter.Put("/v1/admin/managed-config", PutManagedConfiguration(cfg))
+	protectedAPIRouter.Delete("/v1/admin/managed-config", DeleteManagedConfiguration(cfg))
+	protectedAPIRouter.Get("/v1/admin/endpoints", GetManagedEndpoints(cfg))
+	protectedAPIRouter.Post("/v1/admin/endpoints", CreateManagedEndpoint(cfg))
+	protectedAPIRouter.Put("/v1/admin/endpoints/:key", UpdateManagedEndpoint(cfg))
+	protectedAPIRouter.Delete("/v1/admin/endpoints/:key", DeleteManagedEndpoint(cfg))
+	protectedAPIRouter.Get("/v1/admin/notifications", GetManagedNotifications(cfg))
+	protectedAPIRouter.Put("/v1/admin/notifications/:type", PutManagedNotification(cfg))
+	protectedAPIRouter.Delete("/v1/admin/notifications/:type", DeleteManagedNotification(cfg))
 	return app
 }

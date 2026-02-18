@@ -1,0 +1,483 @@
+{
+  "endpoints": [
+    {
+      "Enabled": null,
+      "Name": "front-end",
+      "Group": "core",
+      "URL": "https://twin.sh/health",
+      "Method": "GET",
+      "Body": "",
+      "GraphQL": false,
+      "Headers": {
+        "User-Agent": "Gatus/1.0"
+      },
+      "ExtraLabels": null,
+      "Interval": 300000000000,
+      "Conditions": [
+        "[STATUS] == 200",
+        "[BODY].status == UP",
+        "[RESPONSE_TIME] \u003c 150"
+      ],
+      "Alerts": null,
+      "MaintenanceWindows": null,
+      "DNSConfig": null,
+      "SSHConfig": null,
+      "ClientConfig": {
+        "ProxyURL": "",
+        "Insecure": false,
+        "IgnoreRedirect": false,
+        "Timeout": 10000000000,
+        "DNSResolver": "",
+        "OAuth2Config": null,
+        "IAPConfig": null,
+        "Network": "ip",
+        "TLS": null,
+        "Tunnel": "",
+        "ResolvedTunnel": null
+      },
+      "UIConfig": {
+        "HideConditions": false,
+        "HideHostname": false,
+        "HideURL": false,
+        "HidePort": false,
+        "HideErrors": false,
+        "DontResolveFailedConditions": false,
+        "ResolveSuccessfulConditions": false,
+        "Badge": {
+          "ResponseTime": {
+            "Thresholds": [
+              50,
+              200,
+              300,
+              500,
+              750
+            ]
+          }
+        }
+      },
+      "NumberOfFailuresInARow": 0,
+      "NumberOfSuccessesInARow": 0,
+      "LastReminderSent": "0001-01-01T00:00:00Z",
+      "Store": null,
+      "AlwaysRun": false
+    },
+    {
+      "Enabled": null,
+      "Name": "back-end",
+      "Group": "core",
+      "URL": "https://example.org/",
+      "Method": "GET",
+      "Body": "",
+      "GraphQL": false,
+      "Headers": {
+        "User-Agent": "Gatus/1.0"
+      },
+      "ExtraLabels": null,
+      "Interval": 300000000000,
+      "Conditions": [
+        "[STATUS] == 200",
+        "[CERTIFICATE_EXPIRATION] \u003e 48h"
+      ],
+      "Alerts": null,
+      "MaintenanceWindows": null,
+      "DNSConfig": null,
+      "SSHConfig": null,
+      "ClientConfig": {
+        "ProxyURL": "",
+        "Insecure": false,
+        "IgnoreRedirect": false,
+        "Timeout": 10000000000,
+        "DNSResolver": "",
+        "OAuth2Config": null,
+        "IAPConfig": null,
+        "Network": "ip",
+        "TLS": null,
+        "Tunnel": "",
+        "ResolvedTunnel": null
+      },
+      "UIConfig": {
+        "HideConditions": false,
+        "HideHostname": false,
+        "HideURL": false,
+        "HidePort": false,
+        "HideErrors": false,
+        "DontResolveFailedConditions": false,
+        "ResolveSuccessfulConditions": false,
+        "Badge": {
+          "ResponseTime": {
+            "Thresholds": [
+              50,
+              200,
+              300,
+              500,
+              750
+            ]
+          }
+        }
+      },
+      "NumberOfFailuresInARow": 0,
+      "NumberOfSuccessesInARow": 0,
+      "LastReminderSent": "0001-01-01T00:00:00Z",
+      "Store": null,
+      "AlwaysRun": false
+    },
+    {
+      "Enabled": null,
+      "Name": "monitoring",
+      "Group": "internal",
+      "URL": "https://example.org/",
+      "Method": "GET",
+      "Body": "",
+      "GraphQL": false,
+      "Headers": {
+        "User-Agent": "Gatus/1.0"
+      },
+      "ExtraLabels": null,
+      "Interval": 300000000000,
+      "Conditions": [
+        "[STATUS] == 200"
+      ],
+      "Alerts": null,
+      "MaintenanceWindows": null,
+      "DNSConfig": null,
+      "SSHConfig": null,
+      "ClientConfig": {
+        "ProxyURL": "",
+        "Insecure": false,
+        "IgnoreRedirect": false,
+        "Timeout": 10000000000,
+        "DNSResolver": "",
+        "OAuth2Config": null,
+        "IAPConfig": null,
+        "Network": "ip",
+        "TLS": null,
+        "Tunnel": "",
+        "ResolvedTunnel": null
+      },
+      "UIConfig": {
+        "HideConditions": false,
+        "HideHostname": false,
+        "HideURL": false,
+        "HidePort": false,
+        "HideErrors": false,
+        "DontResolveFailedConditions": false,
+        "ResolveSuccessfulConditions": false,
+        "Badge": {
+          "ResponseTime": {
+            "Thresholds": [
+              50,
+              200,
+              300,
+              500,
+              750
+            ]
+          }
+        }
+      },
+      "NumberOfFailuresInARow": 0,
+      "NumberOfSuccessesInARow": 0,
+      "LastReminderSent": "0001-01-01T00:00:00Z",
+      "Store": null,
+      "AlwaysRun": false
+    },
+    {
+      "Enabled": null,
+      "Name": "nas",
+      "Group": "internal",
+      "URL": "https://example.org/",
+      "Method": "GET",
+      "Body": "",
+      "GraphQL": false,
+      "Headers": {
+        "User-Agent": "Gatus/1.0"
+      },
+      "ExtraLabels": null,
+      "Interval": 300000000000,
+      "Conditions": [
+        "[STATUS] == 200"
+      ],
+      "Alerts": null,
+      "MaintenanceWindows": null,
+      "DNSConfig": null,
+      "SSHConfig": null,
+      "ClientConfig": {
+        "ProxyURL": "",
+        "Insecure": false,
+        "IgnoreRedirect": false,
+        "Timeout": 10000000000,
+        "DNSResolver": "",
+        "OAuth2Config": null,
+        "IAPConfig": null,
+        "Network": "ip",
+        "TLS": null,
+        "Tunnel": "",
+        "ResolvedTunnel": null
+      },
+      "UIConfig": {
+        "HideConditions": false,
+        "HideHostname": false,
+        "HideURL": false,
+        "HidePort": false,
+        "HideErrors": false,
+        "DontResolveFailedConditions": false,
+        "ResolveSuccessfulConditions": false,
+        "Badge": {
+          "ResponseTime": {
+            "Thresholds": [
+              50,
+              200,
+              300,
+              500,
+              750
+            ]
+          }
+        }
+      },
+      "NumberOfFailuresInARow": 0,
+      "NumberOfSuccessesInARow": 0,
+      "LastReminderSent": "0001-01-01T00:00:00Z",
+      "Store": null,
+      "AlwaysRun": false
+    },
+    {
+      "Enabled": null,
+      "Name": "example-dns-query",
+      "Group": "",
+      "URL": "8.8.8.8",
+      "Method": "GET",
+      "Body": "",
+      "GraphQL": false,
+      "Headers": {
+        "User-Agent": "Gatus/1.0"
+      },
+      "ExtraLabels": null,
+      "Interval": 300000000000,
+      "Conditions": [
+        "[BODY] == pat(*.*.*.*)",
+        "[DNS_RCODE] == NOERROR"
+      ],
+      "Alerts": null,
+      "MaintenanceWindows": null,
+      "DNSConfig": {
+        "QueryType": "A",
+        "QueryName": "example.com."
+      },
+      "SSHConfig": null,
+      "ClientConfig": {
+        "ProxyURL": "",
+        "Insecure": false,
+        "IgnoreRedirect": false,
+        "Timeout": 10000000000,
+        "DNSResolver": "",
+        "OAuth2Config": null,
+        "IAPConfig": null,
+        "Network": "ip",
+        "TLS": null,
+        "Tunnel": "",
+        "ResolvedTunnel": null
+      },
+      "UIConfig": {
+        "HideConditions": false,
+        "HideHostname": false,
+        "HideURL": false,
+        "HidePort": false,
+        "HideErrors": false,
+        "DontResolveFailedConditions": false,
+        "ResolveSuccessfulConditions": false,
+        "Badge": {
+          "ResponseTime": {
+            "Thresholds": [
+              50,
+              200,
+              300,
+              500,
+              750
+            ]
+          }
+        }
+      },
+      "NumberOfFailuresInARow": 0,
+      "NumberOfSuccessesInARow": 0,
+      "LastReminderSent": "0001-01-01T00:00:00Z",
+      "Store": null,
+      "AlwaysRun": false
+    },
+    {
+      "Enabled": null,
+      "Name": "icmp-ping",
+      "Group": "",
+      "URL": "icmp://example.org",
+      "Method": "GET",
+      "Body": "",
+      "GraphQL": false,
+      "Headers": {
+        "User-Agent": "Gatus/1.0"
+      },
+      "ExtraLabels": null,
+      "Interval": 60000000000,
+      "Conditions": [
+        "[CONNECTED] == true"
+      ],
+      "Alerts": null,
+      "MaintenanceWindows": null,
+      "DNSConfig": null,
+      "SSHConfig": null,
+      "ClientConfig": {
+        "ProxyURL": "",
+        "Insecure": false,
+        "IgnoreRedirect": false,
+        "Timeout": 10000000000,
+        "DNSResolver": "",
+        "OAuth2Config": null,
+        "IAPConfig": null,
+        "Network": "ip",
+        "TLS": null,
+        "Tunnel": "",
+        "ResolvedTunnel": null
+      },
+      "UIConfig": {
+        "HideConditions": false,
+        "HideHostname": false,
+        "HideURL": false,
+        "HidePort": false,
+        "HideErrors": false,
+        "DontResolveFailedConditions": false,
+        "ResolveSuccessfulConditions": false,
+        "Badge": {
+          "ResponseTime": {
+            "Thresholds": [
+              50,
+              200,
+              300,
+              500,
+              750
+            ]
+          }
+        }
+      },
+      "NumberOfFailuresInARow": 0,
+      "NumberOfSuccessesInARow": 0,
+      "LastReminderSent": "0001-01-01T00:00:00Z",
+      "Store": null,
+      "AlwaysRun": false
+    },
+    {
+      "Enabled": null,
+      "Name": "check-domain-expiration",
+      "Group": "",
+      "URL": "https://example.org/",
+      "Method": "GET",
+      "Body": "",
+      "GraphQL": false,
+      "Headers": {
+        "User-Agent": "Gatus/1.0"
+      },
+      "ExtraLabels": null,
+      "Interval": 3600000000000,
+      "Conditions": [
+        "[DOMAIN_EXPIRATION] \u003e 720h"
+      ],
+      "Alerts": null,
+      "MaintenanceWindows": null,
+      "DNSConfig": null,
+      "SSHConfig": null,
+      "ClientConfig": {
+        "ProxyURL": "",
+        "Insecure": false,
+        "IgnoreRedirect": false,
+        "Timeout": 10000000000,
+        "DNSResolver": "",
+        "OAuth2Config": null,
+        "IAPConfig": null,
+        "Network": "ip",
+        "TLS": null,
+        "Tunnel": "",
+        "ResolvedTunnel": null
+      },
+      "UIConfig": {
+        "HideConditions": false,
+        "HideHostname": false,
+        "HideURL": false,
+        "HidePort": false,
+        "HideErrors": false,
+        "DontResolveFailedConditions": false,
+        "ResolveSuccessfulConditions": false,
+        "Badge": {
+          "ResponseTime": {
+            "Thresholds": [
+              50,
+              200,
+              300,
+              500,
+              750
+            ]
+          }
+        }
+      },
+      "NumberOfFailuresInARow": 0,
+      "NumberOfSuccessesInARow": 0,
+      "LastReminderSent": "0001-01-01T00:00:00Z",
+      "Store": null,
+      "AlwaysRun": false
+    },
+    {
+      "Enabled": true,
+      "Name": "baidu",
+      "Group": "",
+      "URL": "https://baidu.com",
+      "Method": "GET",
+      "Body": "",
+      "GraphQL": false,
+      "Headers": {
+        "User-Agent": "Gatus/1.0"
+      },
+      "ExtraLabels": null,
+      "Interval": 60000000000,
+      "Conditions": [
+        "[STATUS] == 200"
+      ],
+      "Alerts": null,
+      "MaintenanceWindows": null,
+      "DNSConfig": null,
+      "SSHConfig": null,
+      "ClientConfig": {
+        "ProxyURL": "",
+        "Insecure": false,
+        "IgnoreRedirect": false,
+        "Timeout": 10000000000,
+        "DNSResolver": "",
+        "OAuth2Config": null,
+        "IAPConfig": null,
+        "Network": "ip",
+        "TLS": null,
+        "Tunnel": "",
+        "ResolvedTunnel": null
+      },
+      "UIConfig": {
+        "HideConditions": false,
+        "HideHostname": false,
+        "HideURL": false,
+        "HidePort": false,
+        "HideErrors": false,
+        "DontResolveFailedConditions": false,
+        "ResolveSuccessfulConditions": false,
+        "Badge": {
+          "ResponseTime": {
+            "Thresholds": [
+              50,
+              200,
+              300,
+              500,
+              750
+            ]
+          }
+        }
+      },
+      "NumberOfFailuresInARow": 0,
+      "NumberOfSuccessesInARow": 0,
+      "LastReminderSent": "0001-01-01T00:00:00Z",
+      "Store": null,
+      "AlwaysRun": false
+    }
+  ]
+}

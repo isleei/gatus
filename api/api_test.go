@@ -74,6 +74,11 @@ func TestNew(t *testing.T) {
 			ExpectedCode: fiber.StatusOK,
 		},
 		{
+			Name:         "admin",
+			Path:         "/admin",
+			ExpectedCode: fiber.StatusOK,
+		},
+		{
 			Name:         "index-html-redirect",
 			Path:         "/index.html",
 			ExpectedCode: fiber.StatusMovedPermanently,
@@ -91,10 +96,22 @@ func TestNew(t *testing.T) {
 			WithSecurity: true,
 		},
 		{
+			Name:         "admin-notifications-should-return-401-if-not-authenticated",
+			Path:         "/api/v1/admin/notifications",
+			ExpectedCode: fiber.StatusUnauthorized,
+			WithSecurity: true,
+		},
+		{
 			Name:         "config-should-return-200-even-if-not-authenticated",
 			Path:         "/api/v1/config",
 			ExpectedCode: fiber.StatusOK,
 			WithSecurity: true,
+		},
+		{
+			Name:         "admin-notifications-should-return-200-without-security",
+			Path:         "/api/v1/admin/notifications",
+			ExpectedCode: fiber.StatusOK,
+			WithSecurity: false,
 		},
 		{
 			Name:         "config-should-always-return-200",

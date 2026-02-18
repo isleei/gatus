@@ -16,9 +16,12 @@ import (
 )
 
 const (
-	GatusConfigPathEnvVar = "GATUS_CONFIG_PATH"
-	GatusConfigFileEnvVar = "GATUS_CONFIG_FILE" // Deprecated in favor of GatusConfigPathEnvVar
-	GatusLogLevelEnvVar   = "GATUS_LOG_LEVEL"
+	GatusConfigPathEnvVar          = "GATUS_CONFIG_PATH"
+	GatusConfigFileEnvVar          = "GATUS_CONFIG_FILE" // Deprecated in favor of GatusConfigPathEnvVar
+	GatusLogLevelEnvVar            = "GATUS_LOG_LEVEL"
+	GatusConfigWatchIntervalEnvVar = "GATUS_CONFIG_WATCH_INTERVAL"
+
+	DefaultConfigWatchInterval = 5 * time.Second
 )
 
 func main() {
@@ -52,6 +55,7 @@ func start(cfg *config.Config) {
 	go controller.Handle(cfg)
 	metrics.InitializePrometheusMetrics(cfg, nil)
 	watchdog.Monitor(cfg)
+	logr.Infof("[main.start] Configuration file watch interval is set to %s", getConfigurationWatchInterval())
 	go listenToConfigurationFileChanges(cfg)
 }
 
@@ -224,8 +228,9 @@ func closeTunnels(cfg *config.Config) {
 }
 
 func listenToConfigurationFileChanges(cfg *config.Config) {
+	watchInterval := getConfigurationWatchInterval()
 	for {
-		time.Sleep(30 * time.Second)
+		time.Sleep(watchInterval)
 		if cfg.HasLoadedConfigurationBeenModified() {
 			logr.Info("[main.listenToConfigurationFileChanges] Configuration file has been modified")
 			stop(cfg)
@@ -249,4 +254,17 @@ func listenToConfigurationFileChanges(cfg *config.Config) {
 			return
 		}
 	}
+}
+
+func getConfigurationWatchInterval() time.Duration {
+	configWatchIntervalAsString := os.Getenv(GatusConfigWatchIntervalEnvVar)
+	if len(configWatchIntervalAsString) == 0 {
+		return DefaultConfigWatchInterval
+	}
+	parsedInterval, err := time.ParseDuration(configWatchIntervalAsString)
+	if err != nil || parsedInterval < time.Second {
+		logr.Warnf("[main.getConfigurationWatchInterval] Invalid %s value '%s', defaulting to %s", GatusConfigWatchIntervalEnvVar, configWatchIntervalAsString, DefaultConfigWatchInterval)
+		return DefaultConfigWatchInterval
+	}
+	return parsedInterval
 }

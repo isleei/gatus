@@ -123,8 +123,20 @@ type Config struct {
 	// Announcements is the list of system-wide announcements
 	Announcements []*announcement.Announcement `yaml:"announcements,omitempty"`
 
-	configPath      string    // path to the file or directory from which config was loaded
-	lastFileModTime time.Time // last modification time
+	configPath                string    // path to the file or directory from which config was loaded
+	lastFileModTime           time.Time // last modification time
+	managedOverlayPath        string
+	lastManagedOverlayModTime time.Time
+}
+
+// LoadedConfigPath returns the path from which the configuration was loaded.
+func (config *Config) LoadedConfigPath() string {
+	return config.configPath
+}
+
+// ManagedOverlayPath returns the resolved managed overlay path.
+func (config *Config) ManagedOverlayPath() string {
+	return config.managedOverlayPath
 }
 
 // GetUniqueExtraMetricLabels returns a slice of unique metric labels from all enabled endpoints
@@ -175,8 +187,9 @@ func (config *Config) HasLoadedConfigurationBeenModified() bool {
 	lastMod := config.lastFileModTime.Unix()
 	fileInfo, err := os.Stat(config.configPath)
 	if err != nil {
-		return false
+		return config.hasManagedOverlayBeenModified()
 	}
+	baseConfigurationModified := false
 	if fileInfo.IsDir() {
 		err = walkConfigDir(config.configPath, func(path string, d fs.DirEntry, err error) error {
 			if info, err := d.Info(); err == nil && lastMod < info.ModTime().Unix() {
@@ -184,14 +197,17 @@ func (config *Config) HasLoadedConfigurationBeenModified() bool {
 			}
 			return nil
 		})
-		return errors.Is(err, errEarlyReturn)
+		baseConfigurationModified = errors.Is(err, errEarlyReturn)
+	} else {
+		baseConfigurationModified = !fileInfo.ModTime().IsZero() && config.lastFileModTime.Unix() < fileInfo.ModTime().Unix()
 	}
-	return !fileInfo.ModTime().IsZero() && config.lastFileModTime.Unix() < fileInfo.ModTime().Unix()
+	return baseConfigurationModified || config.hasManagedOverlayBeenModified()
 }
 
 // UpdateLastFileModTime refreshes Config.lastFileModTime
 func (config *Config) UpdateLastFileModTime() {
 	config.lastFileModTime = time.Now()
+	config.updateManagedOverlayModTime()
 }
 
 // LoadConfiguration loads the full configuration composed of the main configuration file
@@ -253,6 +269,10 @@ func LoadConfiguration(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("error parsing config: %w", err)
 	}
 	config.configPath = usedConfigPath
+	config.managedOverlayPath = ResolveManagedOverlayPath(usedConfigPath)
+	if err := applyManagedOverlay(config); err != nil {
+		return nil, fmt.Errorf("error applying managed overlay: %w", err)
+	}
 	config.UpdateLastFileModTime()
 	return config, nil
 }
@@ -633,6 +653,7 @@ func ValidateAlertingConfig(alertingConfig *alerting.Config, endpoints []*endpoi
 		alert.TypeTwilio,
 		alert.TypeVonage,
 		alert.TypeWebex,
+		alert.TypeWeCom,
 		alert.TypeZapier,
 		alert.TypeZulip,
 	}

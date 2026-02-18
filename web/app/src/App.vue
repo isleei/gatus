@@ -45,7 +45,13 @@
             <!-- Right Side Actions -->
             <div class="flex items-center gap-2">
               <!-- Navigation Links (Desktop) -->
-              <nav v-if="buttons && buttons.length" class="hidden md:flex items-center gap-1">
+              <nav class="hidden md:flex items-center gap-1">
+                <router-link
+                  to="/admin"
+                  class="px-3 py-2 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  Admin
+                </router-link>
                 <a 
                   v-for="button in buttons" 
                   :key="button.name" 
@@ -59,7 +65,6 @@
 
               <!-- Mobile Menu Button -->
               <Button 
-                v-if="buttons && buttons.length" 
                 variant="ghost" 
                 size="icon" 
                 class="md:hidden"
@@ -73,9 +78,16 @@
 
           <!-- Mobile Navigation -->
           <nav 
-            v-if="buttons && buttons.length && mobileMenuOpen" 
+            v-if="mobileMenuOpen" 
             class="md:hidden mt-4 pt-4 border-t space-y-1"
           >
+            <router-link
+              to="/admin"
+              class="block px-3 py-2 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
+              @click="mobileMenuOpen = false"
+            >
+              Admin
+            </router-link>
             <a 
               v-for="button in buttons" 
               :key="button.name" 

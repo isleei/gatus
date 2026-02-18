@@ -122,6 +122,9 @@ const (
 	// TypeWebex is the Type for the webex alerting provider
 	TypeWebex Type = "webex"
 
+	// TypeWeCom is the Type for the wecom alerting provider
+	TypeWeCom Type = "wecom"
+
 	// TypeZapier is the Type for the zapier alerting provider
 	TypeZapier Type = "zapier"
 

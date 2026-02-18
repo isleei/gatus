@@ -50,6 +50,7 @@ import (
 	"github.com/TwiN/gatus/v5/alerting/provider/twilio"
 	"github.com/TwiN/gatus/v5/alerting/provider/vonage"
 	"github.com/TwiN/gatus/v5/alerting/provider/webex"
+	"github.com/TwiN/gatus/v5/alerting/provider/wecom"
 	"github.com/TwiN/gatus/v5/alerting/provider/zapier"
 	"github.com/TwiN/gatus/v5/alerting/provider/zulip"
 	"github.com/TwiN/gatus/v5/client"
@@ -1893,6 +1894,7 @@ func TestGetAlertingProviderByAlertType(t *testing.T) {
 		Twilio:                &twilio.AlertProvider{},
 		Vonage:                &vonage.AlertProvider{},
 		Webex:                 &webex.AlertProvider{},
+		WeCom:                 &wecom.AlertProvider{},
 		Zapier:                &zapier.AlertProvider{},
 		Zulip:                 &zulip.AlertProvider{},
 	}
@@ -1938,6 +1940,7 @@ func TestGetAlertingProviderByAlertType(t *testing.T) {
 		{alertType: alert.TypeTwilio, expected: alertingConfig.Twilio},
 		{alertType: alert.TypeVonage, expected: alertingConfig.Vonage},
 		{alertType: alert.TypeWebex, expected: alertingConfig.Webex},
+		{alertType: alert.TypeWeCom, expected: alertingConfig.WeCom},
 		{alertType: alert.TypeZapier, expected: alertingConfig.Zapier},
 		{alertType: alert.TypeZulip, expected: alertingConfig.Zulip},
 	}

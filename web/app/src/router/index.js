@@ -2,6 +2,7 @@ import {createRouter, createWebHistory} from 'vue-router'
 import Home from '@/views/Home'
 import EndpointDetails from "@/views/EndpointDetails";
 import SuiteDetails from '@/views/SuiteDetails';
+import AdminPanel from '@/views/AdminPanel';
 
 const routes = [
     {
@@ -18,6 +19,11 @@ const routes = [
         path: '/suites/:key',
         name: 'SuiteDetails',
         component: SuiteDetails
+    },
+    {
+        path: '/admin',
+        name: 'Admin',
+        component: AdminPanel
     }
 ];
 
