@@ -8,6 +8,7 @@ import (
 	"github.com/TwiN/gatus/v5/config/endpoint"
 	"github.com/TwiN/gatus/v5/config/suite"
 	"github.com/TwiN/gatus/v5/storage"
+	"github.com/TwiN/gatus/v5/storage/store/common"
 	"github.com/TwiN/gatus/v5/storage/store/common/paging"
 	"github.com/TwiN/gatus/v5/storage/store/memory"
 	"github.com/TwiN/gatus/v5/storage/store/sql"
@@ -72,6 +73,16 @@ type Store interface {
 
 	// HasEndpointStatusNewerThan checks whether an endpoint has a status newer than the provided timestamp
 	HasEndpointStatusNewerThan(key string, timestamp time.Time) (bool, error)
+
+	// InsertAdminAuditLog inserts a new admin operation audit log entry.
+	InsertAdminAuditLog(entry *common.AdminAuditLogEntry) error
+
+	// GetAdminAuditLogs retrieves admin audit logs matching query filters.
+	// Returns both the page of results and the total count for pagination.
+	GetAdminAuditLogs(query *common.AdminAuditLogQuery) ([]*common.AdminAuditLogEntry, int, error)
+
+	// DeleteAdminAuditLogsOlderThan removes admin audit logs older than the specified timestamp.
+	DeleteAdminAuditLogsOlderThan(before time.Time) (int, error)
 
 	// Clear deletes everything from the store
 	Clear()

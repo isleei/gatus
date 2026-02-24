@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/TwiN/gatus/v5/alerting/alert"
@@ -39,6 +40,9 @@ const (
 	uptimeHourlyBuffer               = 48 * time.Hour      // Number of hours to buffer from now when determining which hourly uptime entries can be merged into daily uptime entries
 
 	cacheTTL = 10 * time.Minute
+
+	adminAuditRetention       = 90 * 24 * time.Hour
+	adminAuditCleanupInterval = 24 * time.Hour
 )
 
 var (
@@ -63,6 +67,9 @@ type Store struct {
 
 	maximumNumberOfResults int // maximum number of results that an endpoint can have
 	maximumNumberOfEvents  int // maximum number of events that an endpoint can have
+
+	adminAuditCleanupMutex sync.Mutex
+	lastAdminAuditCleanup  time.Time
 }
 
 // NewStore initializes the database and creates the schema if it doesn't already exist in the path specified
@@ -561,9 +568,188 @@ func (s *Store) HasEndpointStatusNewerThan(key string, timestamp time.Time) (boo
 	return count > 0, nil
 }
 
+// InsertAdminAuditLog inserts a new admin operation audit log entry.
+func (s *Store) InsertAdminAuditLog(entry *common.AdminAuditLogEntry) error {
+	if entry == nil {
+		return nil
+	}
+	s.maybeCleanupAdminAuditLogs()
+	timestamp := entry.Timestamp
+	if timestamp.IsZero() {
+		timestamp = time.Now().UTC()
+	}
+	_, err := s.db.Exec(
+		`INSERT INTO admin_audit_logs (
+			actor, action, entity_type, entity_key, result, error, before_state, after_state, request_id, created_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		entry.Actor,
+		entry.Action,
+		entry.EntityType,
+		entry.EntityKey,
+		entry.Result,
+		entry.Error,
+		entry.Before,
+		entry.After,
+		entry.RequestID,
+		timestamp.UTC(),
+	)
+	return err
+}
+
+// GetAdminAuditLogs retrieves admin audit logs matching query filters.
+func (s *Store) GetAdminAuditLogs(query *common.AdminAuditLogQuery) ([]*common.AdminAuditLogEntry, int, error) {
+	q := &common.AdminAuditLogQuery{}
+	if query != nil {
+		*q = *query
+	}
+	q.Normalize()
+
+	baseWhere := " FROM admin_audit_logs WHERE 1=1"
+	args := make([]interface{}, 0)
+	argIndex := 0
+	appendCondition := func(condition string, value interface{}) {
+		argIndex++
+		baseWhere += fmt.Sprintf(" AND "+condition, argIndex)
+		args = append(args, value)
+	}
+
+	if strings.TrimSpace(q.Actor) != "" {
+		appendCondition("actor = $%d", strings.TrimSpace(q.Actor))
+	}
+	if strings.TrimSpace(q.Action) != "" {
+		appendCondition("action = $%d", strings.TrimSpace(q.Action))
+	}
+	if strings.TrimSpace(q.EntityType) != "" {
+		appendCondition("entity_type = $%d", strings.TrimSpace(q.EntityType))
+	}
+	if strings.TrimSpace(q.Result) != "" {
+		appendCondition("result = $%d", strings.TrimSpace(q.Result))
+	}
+	if q.From != nil {
+		appendCondition("created_at >= $%d", q.From.UTC())
+	}
+	if q.To != nil {
+		appendCondition("created_at <= $%d", q.To.UTC())
+	}
+	if search := strings.TrimSpace(q.Search); len(search) > 0 {
+		searchPattern := "%" + strings.ToLower(search) + "%"
+		startIndex := argIndex + 1
+		baseWhere += fmt.Sprintf(
+			" AND (LOWER(actor) LIKE $%d OR LOWER(action) LIKE $%d OR LOWER(entity_type) LIKE $%d OR LOWER(entity_key) LIKE $%d OR LOWER(error) LIKE $%d OR LOWER(before_state) LIKE $%d OR LOWER(after_state) LIKE $%d)",
+			startIndex, startIndex+1, startIndex+2, startIndex+3, startIndex+4, startIndex+5, startIndex+6,
+		)
+		args = append(args, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern)
+		argIndex += 7
+	}
+
+	var total int
+	countQuery := "SELECT COUNT(1)" + baseWhere
+	if err := s.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	offset := (q.Page - 1) * q.PageSize
+	argIndex++
+	limitPlaceholder := argIndex
+	args = append(args, q.PageSize)
+	argIndex++
+	offsetPlaceholder := argIndex
+	args = append(args, offset)
+	rowsQuery := fmt.Sprintf(
+		`SELECT admin_audit_log_id, actor, action, entity_type, entity_key, result, error, before_state, after_state, request_id, created_at
+		%s
+		ORDER BY created_at DESC, admin_audit_log_id DESC
+		LIMIT $%d OFFSET $%d`,
+		baseWhere,
+		limitPlaceholder,
+		offsetPlaceholder,
+	)
+	rows, err := s.db.Query(rowsQuery, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	entries := make([]*common.AdminAuditLogEntry, 0, q.PageSize)
+	for rows.Next() {
+		entry := &common.AdminAuditLogEntry{}
+		var entityKey sql.NullString
+		var errorText sql.NullString
+		var beforeState sql.NullString
+		var afterState sql.NullString
+		var requestID sql.NullString
+		if err := rows.Scan(
+			&entry.ID,
+			&entry.Actor,
+			&entry.Action,
+			&entry.EntityType,
+			&entityKey,
+			&entry.Result,
+			&errorText,
+			&beforeState,
+			&afterState,
+			&requestID,
+			&entry.Timestamp,
+		); err != nil {
+			return nil, 0, err
+		}
+		if entityKey.Valid {
+			entry.EntityKey = entityKey.String
+		}
+		if errorText.Valid {
+			entry.Error = errorText.String
+		}
+		if beforeState.Valid {
+			entry.Before = beforeState.String
+		}
+		if afterState.Valid {
+			entry.After = afterState.String
+		}
+		if requestID.Valid {
+			entry.RequestID = requestID.String
+		}
+		entries = append(entries, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return entries, total, nil
+}
+
+// DeleteAdminAuditLogsOlderThan removes admin audit logs older than the specified timestamp.
+func (s *Store) DeleteAdminAuditLogsOlderThan(before time.Time) (int, error) {
+	return s.deleteAdminAuditLogsOlderThan(before)
+}
+
+func (s *Store) deleteAdminAuditLogsOlderThan(before time.Time) (int, error) {
+	result, err := s.db.Exec("DELETE FROM admin_audit_logs WHERE created_at < $1", before.UTC())
+	if err != nil {
+		return 0, err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	return int(rowsAffected), nil
+}
+
+func (s *Store) maybeCleanupAdminAuditLogs() {
+	now := time.Now().UTC()
+	s.adminAuditCleanupMutex.Lock()
+	defer s.adminAuditCleanupMutex.Unlock()
+	if !s.lastAdminAuditCleanup.IsZero() && now.Sub(s.lastAdminAuditCleanup) < adminAuditCleanupInterval {
+		return
+	}
+	if _, err := s.deleteAdminAuditLogsOlderThan(now.Add(-adminAuditRetention)); err != nil {
+		logr.Errorf("[sql.maybeCleanupAdminAuditLogs] Failed cleaning admin audit logs: %s", err.Error())
+	}
+	s.lastAdminAuditCleanup = now
+}
+
 // Clear deletes everything from the store
 func (s *Store) Clear() {
 	_, _ = s.db.Exec("DELETE FROM endpoints")
+	_, _ = s.db.Exec("DELETE FROM admin_audit_logs")
 	if s.writeThroughCache != nil {
 		_ = s.writeThroughCache.DeleteKeysByPattern("*")
 	}

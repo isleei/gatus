@@ -3,6 +3,7 @@ package memory
 import (
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,15 +17,24 @@ import (
 	"github.com/TwiN/logr"
 )
 
+const (
+	maxInMemoryAdminAuditLogs = 5000
+	adminAuditRetention       = 90 * 24 * time.Hour
+	adminAuditCleanupInterval = 24 * time.Hour
+)
+
 // Store that leverages gocache
 type Store struct {
 	sync.RWMutex
 
-	endpointCache *gocache.Cache // Cache for endpoint statuses
-	suiteCache    *gocache.Cache // Cache for suite statuses
+	endpointCache  *gocache.Cache // Cache for endpoint statuses
+	suiteCache     *gocache.Cache // Cache for suite statuses
+	adminAuditLogs []*common.AdminAuditLogEntry
 
 	maximumNumberOfResults int // maximum number of results that an endpoint can have
 	maximumNumberOfEvents  int // maximum number of events that an endpoint can have
+	nextAdminAuditLogID    int64
+	lastAdminAuditCleanup  time.Time
 }
 
 // NewStore creates a new store using gocache.Cache
@@ -35,6 +45,7 @@ func NewStore(maximumNumberOfResults, maximumNumberOfEvents int) (*Store, error)
 	store := &Store{
 		endpointCache:          gocache.NewCache().WithMaxSize(gocache.NoMaxSize),
 		suiteCache:             gocache.NewCache().WithMaxSize(gocache.NoMaxSize),
+		adminAuditLogs:         make([]*common.AdminAuditLogEntry, 0, maxInMemoryAdminAuditLogs),
 		maximumNumberOfResults: maximumNumberOfResults,
 		maximumNumberOfEvents:  maximumNumberOfEvents,
 	}
@@ -315,10 +326,122 @@ func (s *Store) HasEndpointStatusNewerThan(key string, timestamp time.Time) (boo
 	return false, nil
 }
 
+// InsertAdminAuditLog inserts a new admin operation audit log entry.
+func (s *Store) InsertAdminAuditLog(entry *common.AdminAuditLogEntry) error {
+	if entry == nil {
+		return nil
+	}
+	s.Lock()
+	defer s.Unlock()
+	now := time.Now().UTC()
+	if s.lastAdminAuditCleanup.IsZero() || now.Sub(s.lastAdminAuditCleanup) >= adminAuditCleanupInterval {
+		_, _ = s.deleteAdminAuditLogsOlderThanLocked(now.Add(-adminAuditRetention))
+		s.lastAdminAuditCleanup = now
+	}
+	cloned := *entry
+	if cloned.Timestamp.IsZero() {
+		cloned.Timestamp = now
+	}
+	s.nextAdminAuditLogID++
+	cloned.ID = s.nextAdminAuditLogID
+	s.adminAuditLogs = append(s.adminAuditLogs, &cloned)
+	if len(s.adminAuditLogs) > maxInMemoryAdminAuditLogs {
+		s.adminAuditLogs = s.adminAuditLogs[len(s.adminAuditLogs)-maxInMemoryAdminAuditLogs:]
+	}
+	return nil
+}
+
+// GetAdminAuditLogs retrieves admin audit logs matching query filters.
+func (s *Store) GetAdminAuditLogs(query *common.AdminAuditLogQuery) ([]*common.AdminAuditLogEntry, int, error) {
+	s.RLock()
+	defer s.RUnlock()
+	q := &common.AdminAuditLogQuery{}
+	if query != nil {
+		*q = *query
+	}
+	q.Normalize()
+	filtered := make([]*common.AdminAuditLogEntry, 0)
+	needle := strings.ToLower(strings.TrimSpace(q.Search))
+	for i := len(s.adminAuditLogs) - 1; i >= 0; i-- {
+		entry := s.adminAuditLogs[i]
+		if entry == nil {
+			continue
+		}
+		if q.Actor != "" && entry.Actor != q.Actor {
+			continue
+		}
+		if q.Action != "" && entry.Action != q.Action {
+			continue
+		}
+		if q.EntityType != "" && entry.EntityType != q.EntityType {
+			continue
+		}
+		if q.Result != "" && entry.Result != q.Result {
+			continue
+		}
+		if q.From != nil && entry.Timestamp.Before(*q.From) {
+			continue
+		}
+		if q.To != nil && entry.Timestamp.After(*q.To) {
+			continue
+		}
+		if len(needle) > 0 {
+			haystack := strings.ToLower(entry.Actor + " " + entry.Action + " " + entry.EntityType + " " + entry.EntityKey + " " + entry.Error + " " + entry.Before + " " + entry.After)
+			if !strings.Contains(haystack, needle) {
+				continue
+			}
+		}
+		cloned := *entry
+		filtered = append(filtered, &cloned)
+	}
+	total := len(filtered)
+	start := (q.Page - 1) * q.PageSize
+	if start >= total {
+		return []*common.AdminAuditLogEntry{}, total, nil
+	}
+	end := start + q.PageSize
+	if end > total {
+		end = total
+	}
+	return filtered[start:end], total, nil
+}
+
+// DeleteAdminAuditLogsOlderThan removes admin audit logs older than the specified timestamp.
+func (s *Store) DeleteAdminAuditLogsOlderThan(before time.Time) (int, error) {
+	s.Lock()
+	defer s.Unlock()
+	return s.deleteAdminAuditLogsOlderThanLocked(before)
+}
+
+func (s *Store) deleteAdminAuditLogsOlderThanLocked(before time.Time) (int, error) {
+	if len(s.adminAuditLogs) == 0 {
+		return 0, nil
+	}
+	filtered := make([]*common.AdminAuditLogEntry, 0, len(s.adminAuditLogs))
+	removed := 0
+	for _, entry := range s.adminAuditLogs {
+		if entry == nil {
+			continue
+		}
+		if entry.Timestamp.Before(before) {
+			removed++
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	s.adminAuditLogs = filtered
+	return removed, nil
+}
+
 // Clear deletes everything from the store
 func (s *Store) Clear() {
 	s.endpointCache.Clear()
 	s.suiteCache.Clear()
+	s.Lock()
+	s.adminAuditLogs = make([]*common.AdminAuditLogEntry, 0, maxInMemoryAdminAuditLogs)
+	s.nextAdminAuditLogID = 0
+	s.lastAdminAuditCleanup = time.Time{}
+	s.Unlock()
 }
 
 // Save persists the cache to the store file

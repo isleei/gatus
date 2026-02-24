@@ -54,6 +54,7 @@ func PutManagedNotification(cfg *config.Config) fiber.Handler {
 		notificationType := normalizeManagedNotificationType(c.Params("type"))
 		fieldIndex, fieldType, err := getManagedNotificationField(notificationType)
 		if err != nil {
+			writeAdminAudit(c, cfg, "update", "notification", notificationType, nil, nil, err)
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": err.Error(),
 			})
@@ -64,61 +65,75 @@ func PutManagedNotification(cfg *config.Config) fiber.Handler {
 		}
 		var payload map[string]any
 		if err := json.Unmarshal(rawBody, &payload); err != nil {
+			writeAdminAudit(c, cfg, "update", "notification", notificationType, nil, nil, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "invalid payload: " + err.Error(),
 			})
 		}
 		candidate, err := loadManagedCandidate(cfg)
 		if err != nil {
+			writeAdminAudit(c, cfg, "update", "notification", notificationType, payload, nil, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
+		beforeNotifications, _ := buildManagedNotificationList(candidate)
+		before := findManagedNotificationByType(beforeNotifications, notificationType)
 		if candidate.Alerting == nil {
 			candidate.Alerting = &alerting.Config{}
 		}
 		notificationProvider := reflect.New(fieldType.Elem())
 		if err := yaml.Unmarshal(rawBody, notificationProvider.Interface()); err != nil {
+			writeAdminAudit(c, cfg, "update", "notification", notificationType, before, payload, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "failed to decode provider configuration: " + err.Error(),
 			})
 		}
 		alertProvider, ok := notificationProvider.Interface().(provider.AlertProvider)
 		if !ok {
+			err := fmt.Errorf("provider does not implement alerting provider interface")
+			writeAdminAudit(c, cfg, "update", "notification", notificationType, before, payload, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error": "provider does not implement alerting provider interface",
+				"error": err.Error(),
 			})
 		}
 		if err := alertProvider.Validate(); err != nil {
+			writeAdminAudit(c, cfg, "update", "notification", notificationType, before, payload, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		reflect.ValueOf(candidate.Alerting).Elem().Field(fieldIndex).Set(notificationProvider)
 		if err := validateManagedPayload(candidate); err != nil {
+			writeAdminAudit(c, cfg, "update", "notification", notificationType, before, payload, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		if err := persistManagedCandidateWithAlerting(cfg, candidate, true); err != nil {
+			writeAdminAudit(c, cfg, "update", "notification", notificationType, before, payload, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		serializedConfig, err := extractManagedNotificationConfig(notificationProvider)
 		if err != nil {
+			writeAdminAudit(c, cfg, "update", "notification", notificationType, before, payload, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		usedByEndpoints, usedByExternalEndpoints := countAlertTypeReferences(candidate, alert.Type(notificationType))
-		return c.Status(fiber.StatusOK).JSON(ManagedNotification{
+		response := ManagedNotification{
 			Type:                    notificationType,
 			Configured:              true,
 			UsedByEndpoints:         usedByEndpoints,
 			UsedByExternalEndpoints: usedByExternalEndpoints,
 			Config:                  serializedConfig,
-		})
+		}
+		clearAdminDerivedCache()
+		writeAdminAudit(c, cfg, "update", "notification", notificationType, before, response, nil)
+		return c.Status(fiber.StatusOK).JSON(response)
 	}
 }
 
@@ -127,31 +142,41 @@ func DeleteManagedNotification(cfg *config.Config) fiber.Handler {
 		notificationType := normalizeManagedNotificationType(c.Params("type"))
 		fieldIndex, _, err := getManagedNotificationField(notificationType)
 		if err != nil {
+			writeAdminAudit(c, cfg, "delete", "notification", notificationType, nil, nil, err)
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		candidate, err := loadManagedCandidate(cfg)
 		if err != nil {
+			writeAdminAudit(c, cfg, "delete", "notification", notificationType, nil, nil, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
+		beforeNotifications, _ := buildManagedNotificationList(candidate)
+		before := findManagedNotificationByType(beforeNotifications, notificationType)
 		usedByEndpoints, usedByExternalEndpoints := countAlertTypeReferences(candidate, alert.Type(notificationType))
 		if usedByEndpoints > 0 || usedByExternalEndpoints > 0 {
+			err := fmt.Errorf("notification type %s is still referenced by %d endpoint(s) and %d external endpoint(s)", notificationType, usedByEndpoints, usedByExternalEndpoints)
+			writeAdminAudit(c, cfg, "delete", "notification", notificationType, before, nil, err)
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
-				"error": fmt.Sprintf("notification type %s is still referenced by %d endpoint(s) and %d external endpoint(s)", notificationType, usedByEndpoints, usedByExternalEndpoints),
+				"error": err.Error(),
 			})
 		}
 		if candidate.Alerting == nil {
+			err := fmt.Errorf("notification type %s is not configured", notificationType)
+			writeAdminAudit(c, cfg, "delete", "notification", notificationType, before, nil, err)
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": fmt.Sprintf("notification type %s is not configured", notificationType),
+				"error": err.Error(),
 			})
 		}
 		fieldValue := reflect.ValueOf(candidate.Alerting).Elem().Field(fieldIndex)
 		if fieldValue.IsNil() {
+			err := fmt.Errorf("notification type %s is not configured", notificationType)
+			writeAdminAudit(c, cfg, "delete", "notification", notificationType, before, nil, err)
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": fmt.Sprintf("notification type %s is not configured", notificationType),
+				"error": err.Error(),
 			})
 		}
 		fieldValue.Set(reflect.Zero(fieldValue.Type()))
@@ -159,15 +184,19 @@ func DeleteManagedNotification(cfg *config.Config) fiber.Handler {
 			candidate.Alerting = nil
 		}
 		if err := validateManagedPayload(candidate); err != nil {
+			writeAdminAudit(c, cfg, "delete", "notification", notificationType, before, nil, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		if err := persistManagedCandidateWithAlerting(cfg, candidate, true); err != nil {
+			writeAdminAudit(c, cfg, "delete", "notification", notificationType, before, nil, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
+		clearAdminDerivedCache()
+		writeAdminAudit(c, cfg, "delete", "notification", notificationType, before, nil, nil)
 		return c.SendStatus(fiber.StatusNoContent)
 	}
 }
@@ -267,4 +296,14 @@ func countAlertTypeReferences(candidate *config.Config, notificationType alert.T
 		}
 	}
 	return usedByEndpoints, usedByExternalEndpoints
+}
+
+func findManagedNotificationByType(notifications []ManagedNotification, targetType string) *ManagedNotification {
+	for i := range notifications {
+		if notifications[i].Type == targetType {
+			cloned := notifications[i]
+			return &cloned
+		}
+	}
+	return nil
 }

@@ -110,15 +110,66 @@ func (s *Store) createPostgresSchema() error {
 	if err != nil {
 		return err
 	}
+	_, err = s.db.Exec(`
+		CREATE TABLE IF NOT EXISTS admin_audit_logs (
+			admin_audit_log_id BIGSERIAL PRIMARY KEY,
+			actor              TEXT      NOT NULL,
+			action             TEXT      NOT NULL,
+			entity_type        TEXT      NOT NULL,
+			entity_key         TEXT      NOT NULL DEFAULT '',
+			result             TEXT      NOT NULL,
+			error              TEXT      NOT NULL DEFAULT '',
+			before_state       TEXT      NOT NULL DEFAULT '',
+			after_state        TEXT      NOT NULL DEFAULT '',
+			request_id         TEXT      NOT NULL DEFAULT '',
+			created_at         TIMESTAMP NOT NULL
+		)
+	`)
+	if err != nil {
+		return err
+	}
 	// Create index for suite_results
 	_, err = s.db.Exec(`
 		CREATE INDEX IF NOT EXISTS suite_results_suite_id_idx ON suite_results (suite_id);
 	`)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`
+		CREATE INDEX IF NOT EXISTS admin_audit_logs_created_at_idx ON admin_audit_logs (created_at);
+	`)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`
+		CREATE INDEX IF NOT EXISTS admin_audit_logs_actor_idx ON admin_audit_logs (actor);
+	`)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`
+		CREATE INDEX IF NOT EXISTS admin_audit_logs_action_idx ON admin_audit_logs (action);
+	`)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`
+		CREATE INDEX IF NOT EXISTS admin_audit_logs_entity_type_idx ON admin_audit_logs (entity_type);
+	`)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.Exec(`
+		CREATE INDEX IF NOT EXISTS admin_audit_logs_result_idx ON admin_audit_logs (result);
+	`)
+	if err != nil {
+		return err
+	}
 	// Silent table modifications TODO: Remove this in v6.0.0
 	_, _ = s.db.Exec(`ALTER TABLE endpoint_results ADD IF NOT EXISTS domain_expiration BIGINT NOT NULL DEFAULT 0`)
 	// Add suite_result_id to endpoint_results table for suite endpoint linkage
 	_, _ = s.db.Exec(`ALTER TABLE endpoint_results ADD COLUMN IF NOT EXISTS suite_result_id BIGINT REFERENCES suite_results(suite_result_id) ON DELETE CASCADE`)
 	// Create index for suite_result_id
 	_, _ = s.db.Exec(`CREATE INDEX IF NOT EXISTS endpoint_results_suite_result_id_idx ON endpoint_results(suite_result_id)`)
-	return err
+	return nil
 }

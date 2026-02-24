@@ -109,3 +109,27 @@ func (c *Config) IsAuthenticated(ctx *fiber.Ctx) bool {
 	}
 	return false
 }
+
+// GetActor returns the best-effort authenticated actor identifier for audit logging.
+func (c *Config) GetActor(ctx *fiber.Ctx) string {
+	if c == nil || ctx == nil {
+		return "anonymous"
+	}
+	if c.gate != nil {
+		request, err := adaptor.ConvertRequest(ctx, false)
+		if err != nil {
+			logr.Errorf("[security.GetActor] Unexpected error converting request: %v", err)
+		} else {
+			token := c.gate.ExtractTokenFromRequest(request)
+			if value, exists := sessions.Get(token); exists {
+				if subject, ok := value.(string); ok && len(subject) > 0 {
+					return subject
+				}
+			}
+		}
+	}
+	if c.Basic != nil && len(c.Basic.Username) > 0 {
+		return c.Basic.Username
+	}
+	return "anonymous"
+}

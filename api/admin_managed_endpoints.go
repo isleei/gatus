@@ -13,31 +13,33 @@ import (
 )
 
 type ManagedEndpointPayload struct {
-	Enabled    *bool             `json:"enabled,omitempty"`
-	Name       string            `json:"name"`
-	Group      string            `json:"group,omitempty"`
-	URL        string            `json:"url"`
-	Method     string            `json:"method,omitempty"`
-	Body       string            `json:"body,omitempty"`
-	GraphQL    bool              `json:"graphql,omitempty"`
-	Headers    map[string]string `json:"headers,omitempty"`
-	Interval   string            `json:"interval,omitempty"`
-	Conditions []string          `json:"conditions"`
+	Enabled    *bool                 `json:"enabled,omitempty"`
+	Name       string                `json:"name"`
+	Group      string                `json:"group,omitempty"`
+	URL        string                `json:"url"`
+	Method     string                `json:"method,omitempty"`
+	Body       string                `json:"body,omitempty"`
+	GraphQL    bool                  `json:"graphql,omitempty"`
+	Headers    map[string]string     `json:"headers,omitempty"`
+	Interval   string                `json:"interval,omitempty"`
+	Conditions []string              `json:"conditions"`
+	Alerts     []ManagedAlertPayload `json:"alerts,omitempty"`
 }
 
 type ManagedEndpointResponse struct {
-	Key        string            `json:"key"`
-	Type       endpoint.Type     `json:"type"`
-	Enabled    *bool             `json:"enabled,omitempty"`
-	Name       string            `json:"name"`
-	Group      string            `json:"group,omitempty"`
-	URL        string            `json:"url"`
-	Method     string            `json:"method,omitempty"`
-	Body       string            `json:"body,omitempty"`
-	GraphQL    bool              `json:"graphql,omitempty"`
-	Headers    map[string]string `json:"headers,omitempty"`
-	Interval   string            `json:"interval,omitempty"`
-	Conditions []string          `json:"conditions"`
+	Key        string                `json:"key"`
+	Type       endpoint.Type         `json:"type"`
+	Enabled    *bool                 `json:"enabled,omitempty"`
+	Name       string                `json:"name"`
+	Group      string                `json:"group,omitempty"`
+	URL        string                `json:"url"`
+	Method     string                `json:"method,omitempty"`
+	Body       string                `json:"body,omitempty"`
+	GraphQL    bool                  `json:"graphql,omitempty"`
+	Headers    map[string]string     `json:"headers,omitempty"`
+	Interval   string                `json:"interval,omitempty"`
+	Conditions []string              `json:"conditions"`
+	Alerts     []ManagedAlertPayload `json:"alerts,omitempty"`
 }
 
 type ManagedEndpointListResponse struct {
@@ -71,34 +73,42 @@ func CreateManagedEndpoint(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var payload ManagedEndpointPayload
 		if err := c.BodyParser(&payload); err != nil {
+			writeAdminAudit(c, cfg, "create", monitorEntityEndpoint, "", nil, nil, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "invalid payload: " + err.Error(),
 			})
 		}
 		candidate, err := loadManagedCandidate(cfg)
 		if err != nil {
+			writeAdminAudit(c, cfg, "create", monitorEntityEndpoint, "", payload, nil, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		newEndpoint, err := buildManagedEndpointFromPayload(&payload)
 		if err != nil {
+			writeAdminAudit(c, cfg, "create", monitorEntityEndpoint, "", payload, nil, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		candidate.Endpoints = append(candidate.Endpoints, newEndpoint)
 		if err := validateManagedPayload(candidate); err != nil {
+			writeAdminAudit(c, cfg, "create", monitorEntityEndpoint, newEndpoint.Key(), payload, nil, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		if err := persistManagedCandidate(cfg, candidate); err != nil {
+			writeAdminAudit(c, cfg, "create", monitorEntityEndpoint, newEndpoint.Key(), payload, nil, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
-		return c.Status(fiber.StatusCreated).JSON(toManagedEndpointResponse(newEndpoint))
+		clearAdminDerivedCache()
+		response := toManagedEndpointResponse(newEndpoint)
+		writeAdminAudit(c, cfg, "create", monitorEntityEndpoint, newEndpoint.Key(), nil, response, nil)
+		return c.Status(fiber.StatusCreated).JSON(response)
 	}
 }
 
@@ -106,44 +116,57 @@ func UpdateManagedEndpoint(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		targetKey := strings.TrimSpace(strings.ToLower(c.Params("key")))
 		if len(targetKey) == 0 {
+			err := errors.New("missing endpoint key")
+			writeAdminAudit(c, cfg, "update", monitorEntityEndpoint, "", nil, nil, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing endpoint key",
+				"error": err.Error(),
 			})
 		}
 		var payload ManagedEndpointPayload
 		if err := c.BodyParser(&payload); err != nil {
+			writeAdminAudit(c, cfg, "update", monitorEntityEndpoint, targetKey, nil, nil, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "invalid payload: " + err.Error(),
 			})
 		}
 		candidate, err := loadManagedCandidate(cfg)
 		if err != nil {
+			writeAdminAudit(c, cfg, "update", monitorEntityEndpoint, targetKey, payload, nil, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		index := findEndpointIndexByKey(candidate.Endpoints, targetKey)
 		if index < 0 {
+			err := fmt.Errorf("endpoint with key %s not found", targetKey)
+			writeAdminAudit(c, cfg, "update", monitorEntityEndpoint, targetKey, payload, nil, err)
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": fmt.Sprintf("endpoint with key %s not found", targetKey),
+				"error": err.Error(),
 			})
 		}
+		before := toManagedEndpointResponse(candidate.Endpoints[index])
 		if err := applyManagedEndpointPayload(candidate.Endpoints[index], &payload); err != nil {
+			writeAdminAudit(c, cfg, "update", monitorEntityEndpoint, targetKey, before, payload, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		if err := validateManagedPayload(candidate); err != nil {
+			writeAdminAudit(c, cfg, "update", monitorEntityEndpoint, targetKey, before, payload, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		if err := persistManagedCandidate(cfg, candidate); err != nil {
+			writeAdminAudit(c, cfg, "update", monitorEntityEndpoint, targetKey, before, payload, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
-		return c.Status(fiber.StatusOK).JSON(toManagedEndpointResponse(candidate.Endpoints[index]))
+		clearAdminDerivedCache()
+		response := toManagedEndpointResponse(candidate.Endpoints[index])
+		writeAdminAudit(c, cfg, "update", monitorEntityEndpoint, response.Key, before, response, nil)
+		return c.Status(fiber.StatusOK).JSON(response)
 	}
 }
 
@@ -151,33 +174,43 @@ func DeleteManagedEndpoint(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		targetKey := strings.TrimSpace(strings.ToLower(c.Params("key")))
 		if len(targetKey) == 0 {
+			err := errors.New("missing endpoint key")
+			writeAdminAudit(c, cfg, "delete", monitorEntityEndpoint, "", nil, nil, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-				"error": "missing endpoint key",
+				"error": err.Error(),
 			})
 		}
 		candidate, err := loadManagedCandidate(cfg)
 		if err != nil {
+			writeAdminAudit(c, cfg, "delete", monitorEntityEndpoint, targetKey, nil, nil, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		index := findEndpointIndexByKey(candidate.Endpoints, targetKey)
 		if index < 0 {
+			err := fmt.Errorf("endpoint with key %s not found", targetKey)
+			writeAdminAudit(c, cfg, "delete", monitorEntityEndpoint, targetKey, nil, nil, err)
 			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
-				"error": fmt.Sprintf("endpoint with key %s not found", targetKey),
+				"error": err.Error(),
 			})
 		}
+		before := toManagedEndpointResponse(candidate.Endpoints[index])
 		candidate.Endpoints = append(candidate.Endpoints[:index], candidate.Endpoints[index+1:]...)
 		if err := validateManagedPayload(candidate); err != nil {
+			writeAdminAudit(c, cfg, "delete", monitorEntityEndpoint, targetKey, before, nil, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		if err := persistManagedCandidate(cfg, candidate); err != nil {
+			writeAdminAudit(c, cfg, "delete", monitorEntityEndpoint, targetKey, before, nil, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
+		clearAdminDerivedCache()
+		writeAdminAudit(c, cfg, "delete", monitorEntityEndpoint, targetKey, before, nil, nil)
 		return c.SendStatus(fiber.StatusNoContent)
 	}
 }
@@ -196,6 +229,7 @@ func toManagedEndpointResponse(monitoredEndpoint *endpoint.Endpoint) ManagedEndp
 		Headers:    make(map[string]string, len(monitoredEndpoint.Headers)),
 		Interval:   monitoredEndpoint.Interval.String(),
 		Conditions: make([]string, 0, len(monitoredEndpoint.Conditions)),
+		Alerts:     alertsToManagedPayload(monitoredEndpoint.Alerts),
 	}
 	for headerName, headerValue := range monitoredEndpoint.Headers {
 		response.Headers[headerName] = headerValue
@@ -244,6 +278,11 @@ func applyManagedEndpointPayload(monitoredEndpoint *endpoint.Endpoint, payload *
 	monitoredEndpoint.Headers = headers
 	monitoredEndpoint.Interval = interval
 	monitoredEndpoint.Conditions = conditions
+	parsedAlerts, err := buildManagedAlertsFromPayload(payload.Alerts)
+	if err != nil {
+		return err
+	}
+	monitoredEndpoint.Alerts = parsedAlerts
 	return nil
 }
 

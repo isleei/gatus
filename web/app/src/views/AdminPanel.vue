@@ -1,225 +1,414 @@
 <template>
-  <div class="container mx-auto px-4 py-8 max-w-7xl">
-    <div class="mb-6">
-      <h1 class="text-3xl font-bold tracking-tight">{{ t('admin.title') }}</h1>
-      <p class="text-muted-foreground mt-2">
-        {{ t('admin.subtitle') }}
-      </p>
+  <div class="container mx-auto px-4 py-6 max-w-7xl space-y-4">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight">{{ t('adminV2.title') }}</h1>
+      <p class="text-muted-foreground mt-1">{{ t('adminV2.subtitle') }}</p>
     </div>
 
-    <div class="p-4 rounded-lg border bg-card mb-6">
-      <p class="text-sm">
-        <span class="font-semibold">{{ t('admin.overlayPath') }}</span> {{ overlayPath || t('common.noData') }}
-      </p>
-      <p class="text-muted-foreground text-sm mt-1">
-        {{ t('admin.autoAppliedHint') }}
-      </p>
+    <div class="p-3 rounded-lg border bg-card text-sm text-muted-foreground">
+      <span class="font-medium text-foreground">{{ t('admin.overlayPath') }}</span>
+      <span class="ml-2">{{ overlayPath || t('common.noData') }}</span>
     </div>
 
-    <div class="grid gap-6 lg:grid-cols-[22rem,1fr]">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <Card>
+        <CardContent class="p-4">
+          <p class="text-xs text-muted-foreground">{{ t('adminV2.kpiTotal') }}</p>
+          <p class="text-2xl font-semibold">{{ monitorsKpi.total }}</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent class="p-4">
+          <p class="text-xs text-muted-foreground">{{ t('adminV2.kpiUnhealthy') }}</p>
+          <p class="text-2xl font-semibold text-red-600">{{ monitorsKpi.unhealthy }}</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent class="p-4">
+          <p class="text-xs text-muted-foreground">{{ t('adminV2.kpiDisabled') }}</p>
+          <p class="text-2xl font-semibold">{{ monitorsKpi.disabled }}</p>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent class="p-4">
+          <p class="text-xs text-muted-foreground">{{ t('adminV2.kpiUnknown') }}</p>
+          <p class="text-2xl font-semibold">{{ monitorsKpi.unknown }}</p>
+        </CardContent>
+      </Card>
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <Button :variant="activeTab === 'monitors' ? 'default' : 'outline'" size="sm" @click="activeTab = 'monitors'">{{ t('adminV2.tabMonitors') }}</Button>
+      <Button :variant="activeTab === 'audit' ? 'default' : 'outline'" size="sm" @click="activeTab = 'audit'">{{ t('adminV2.tabAudit') }}</Button>
+      <Button :variant="activeTab === 'advanced' ? 'default' : 'outline'" size="sm" @click="activeTab = 'advanced'">{{ t('adminV2.tabAdvanced') }}</Button>
+    </div>
+
+    <template v-if="activeTab === 'monitors'">
+      <Card>
+        <CardContent class="p-4 space-y-3">
+          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <Input v-model="filters.q" :placeholder="t('adminV2.searchPlaceholder')" @keyup.enter="refreshMonitors" />
+            <Select v-model="filters.entityType" :options="entityTypeOptions" @update:model-value="onFilterChange" />
+            <Select v-model="filters.status" :options="statusFilterOptions" @update:model-value="onFilterChange" />
+            <Select v-model="filters.enabled" :options="enabledFilterOptions" @update:model-value="onFilterChange" />
+            <Select v-model="filters.group" :options="groupFilterOptions" @update:model-value="onFilterChange" />
+            <Select v-model="filters.sortBy" :options="sortByOptions" @update:model-value="onFilterChange" />
+            <Select v-model="filters.sortDir" :options="sortDirOptions" @update:model-value="onFilterChange" />
+            <Select v-model="filters.pageSize" :options="pageSizeOptions" @update:model-value="onFilterChange" />
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" @click="refreshMonitors" :disabled="loadingMonitors">{{ t('common.refresh') }}</Button>
+            <Button size="sm" variant="secondary" @click="openCreate('endpoint')">{{ t('adminV2.newEndpoint') }}</Button>
+            <Button size="sm" variant="secondary" @click="openCreate('suite')">{{ t('adminV2.newSuite') }}</Button>
+            <Button size="sm" variant="secondary" @click="openCreate('external')">{{ t('adminV2.newExternal') }}</Button>
+            <Button size="sm" variant="outline" @click="openImportExport">{{ t('adminV2.importExport') }}</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent class="p-0">
+          <div v-if="loadingMonitors" class="p-6 text-sm text-muted-foreground">{{ t('common.loading') }}</div>
+          <div v-else>
+            <div class="hidden lg:block overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-muted/50">
+                  <tr>
+                    <th class="p-3 text-left w-10">
+                      <input type="checkbox" :checked="allPageSelected" @change="toggleAllPageSelection($event.target.checked)" />
+                    </th>
+                    <th class="p-3 text-left">{{ t('common.status') }}</th>
+                    <th class="p-3 text-left">{{ t('common.name') }}</th>
+                    <th class="p-3 text-left">{{ t('common.group') }}</th>
+                    <th class="p-3 text-left">{{ t('common.type') }}</th>
+                    <th class="p-3 text-left">{{ t('common.url') }}</th>
+                    <th class="p-3 text-left">{{ t('common.interval') }}</th>
+                    <th class="p-3 text-left">{{ t('adminV2.lastCheck') }}</th>
+                    <th class="p-3 text-left">{{ t('common.duration') }}</th>
+                    <th class="p-3 text-left">{{ t('adminV2.notifications') }}</th>
+                    <th class="p-3 text-left">{{ t('adminV2.actions') }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="monitor in monitors" :key="monitor.entityType + '-' + monitor.key" class="border-t">
+                    <td class="p-3 align-top">
+                      <input type="checkbox" :checked="selectedKeySet.has(monitor.key)" @change="toggleSelection(monitor.key, $event.target.checked)" />
+                    </td>
+                    <td class="p-3 align-top">
+                      <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs" :class="statusClass(monitor.status)">
+                        {{ monitor.status }}
+                      </span>
+                    </td>
+                    <td class="p-3 align-top font-medium">{{ monitor.name }}</td>
+                    <td class="p-3 align-top">{{ monitor.group || '-' }}</td>
+                    <td class="p-3 align-top">{{ monitor.type }}</td>
+                    <td class="p-3 align-top break-all">{{ monitor.steps > 0 ? `${monitor.steps} steps` : monitor.url || '-' }}</td>
+                    <td class="p-3 align-top">{{ monitor.interval || '-' }}</td>
+                    <td class="p-3 align-top">{{ formatDateTime(monitor.lastCheck) }}</td>
+                    <td class="p-3 align-top">{{ monitor.duration || '-' }}</td>
+                    <td class="p-3 align-top">{{ (monitor.notificationTypes || []).join(', ') || '-' }}</td>
+                    <td class="p-3 align-top">
+                      <div class="flex flex-wrap gap-1">
+                        <Button size="sm" variant="outline" @click="openEdit(monitor)">{{ t('adminV2.edit') }}</Button>
+                        <Button size="sm" variant="outline" @click="openCopy(monitor)">{{ t('adminV2.copy') }}</Button>
+                        <Button size="sm" variant="outline" @click="toggleEnabled(monitor)">{{ monitor.enabled ? t('adminV2.disable') : t('adminV2.enable') }}</Button>
+                        <Button size="sm" variant="destructive" @click="deleteMonitor(monitor)">{{ t('adminV2.delete') }}</Button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="lg:hidden space-y-3 p-3">
+              <div v-for="monitor in monitors" :key="monitor.entityType + '-' + monitor.key" class="rounded-lg border p-3 space-y-2">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2">
+                    <input type="checkbox" :checked="selectedKeySet.has(monitor.key)" @change="toggleSelection(monitor.key, $event.target.checked)" />
+                    <p class="font-medium">{{ monitor.name }}</p>
+                  </div>
+                  <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs" :class="statusClass(monitor.status)">
+                    {{ monitor.status }}
+                  </span>
+                </div>
+                <p class="text-xs text-muted-foreground">{{ monitor.group || '-' }} · {{ monitor.type }}</p>
+                <p class="text-xs break-all">{{ monitor.steps > 0 ? `${monitor.steps} steps` : monitor.url || '-' }}</p>
+                <div class="flex flex-wrap gap-1">
+                  <Button size="sm" variant="outline" @click="openEdit(monitor)">{{ t('adminV2.edit') }}</Button>
+                  <Button size="sm" variant="outline" @click="openCopy(monitor)">{{ t('adminV2.copy') }}</Button>
+                  <Button size="sm" variant="outline" @click="toggleEnabled(monitor)">{{ monitor.enabled ? t('adminV2.disable') : t('adminV2.enable') }}</Button>
+                  <Button size="sm" variant="destructive" @click="deleteMonitor(monitor)">{{ t('adminV2.delete') }}</Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card v-if="selectedKeys.length > 0">
+        <CardContent class="p-4 space-y-3">
+          <p class="text-sm text-muted-foreground">{{ t('adminV2.selectedCount', { count: selectedKeys.length }) }}</p>
+          <div class="grid gap-3 md:grid-cols-3">
+            <Select v-model="batch.action" :options="batchActionOptions" />
+            <Input v-if="batch.action === 'set-group'" v-model="batch.group" :placeholder="t('adminV2.groupPlaceholder')" />
+            <Input v-if="batch.action === 'set-interval'" v-model="batch.interval" :placeholder="t('adminV2.intervalPlaceholder')" />
+            <Input v-if="batch.action === 'set-alert-types'" v-model="batch.alertTypes" :placeholder="t('adminV2.alertTypesPlaceholder')" />
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <Button size="sm" @click="executeBatch(false)" :disabled="batchLoading">{{ t('adminV2.applyBatch') }}</Button>
+            <Button size="sm" variant="outline" @click="executeBatch(true)" :disabled="batchLoading">{{ t('adminV2.dryRunBatch') }}</Button>
+            <Button size="sm" variant="outline" @click="clearSelection">{{ t('adminV2.clearSelection') }}</Button>
+          </div>
+          <p v-if="batchMessage" class="text-sm text-muted-foreground">{{ batchMessage }}</p>
+        </CardContent>
+      </Card>
+
+      <div class="flex items-center justify-between text-sm">
+        <Button size="sm" variant="outline" :disabled="filters.page <= 1" @click="filters.page--; refreshMonitors()">{{ t('pagination.previous') }}</Button>
+        <span>{{ t('pagination.pageOf', { current: filters.page, total: monitorTotalPages }) }}</span>
+        <Button size="sm" variant="outline" :disabled="filters.page >= monitorTotalPages" @click="filters.page++; refreshMonitors()">{{ t('pagination.next') }}</Button>
+      </div>
+    </template>
+
+    <template v-if="activeTab === 'audit'">
+      <Card>
+        <CardContent class="p-4 space-y-3">
+          <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <Input v-model="auditFilters.actor" :placeholder="t('adminV2.actor')" @keyup.enter="refreshAuditLogs" />
+            <Input v-model="auditFilters.action" :placeholder="t('adminV2.action')" @keyup.enter="refreshAuditLogs" />
+            <Select v-model="auditFilters.result" :options="auditResultOptions" />
+            <Input v-model="auditFilters.q" :placeholder="t('adminV2.searchPlaceholder')" @keyup.enter="refreshAuditLogs" />
+            <Button variant="outline" @click="refreshAuditLogs" :disabled="loadingAudit">{{ t('common.refresh') }}</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent class="p-0 overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-muted/50">
+              <tr>
+                <th class="p-3 text-left">{{ t('common.timestamp') }}</th>
+                <th class="p-3 text-left">{{ t('adminV2.actor') }}</th>
+                <th class="p-3 text-left">{{ t('adminV2.action') }}</th>
+                <th class="p-3 text-left">{{ t('common.type') }}</th>
+                <th class="p-3 text-left">{{ t('common.status') }}</th>
+                <th class="p-3 text-left">{{ t('common.errors') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in auditLogs" :key="item.id" class="border-t">
+                <td class="p-3">{{ formatDateTime(item.timestamp) }}</td>
+                <td class="p-3">{{ item.actor }}</td>
+                <td class="p-3">{{ item.action }} {{ item.entityType }} {{ item.entityKey || '' }}</td>
+                <td class="p-3">{{ item.entityType }}</td>
+                <td class="p-3">{{ item.result }}</td>
+                <td class="p-3 text-xs text-muted-foreground break-all">{{ item.error || '-' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+
+      <div class="flex items-center justify-between text-sm">
+        <Button size="sm" variant="outline" :disabled="auditFilters.page <= 1" @click="auditFilters.page--; refreshAuditLogs()">{{ t('pagination.previous') }}</Button>
+        <span>{{ t('pagination.pageOf', { current: auditFilters.page, total: auditTotalPages }) }}</span>
+        <Button size="sm" variant="outline" :disabled="auditFilters.page >= auditTotalPages" @click="auditFilters.page++; refreshAuditLogs()">{{ t('pagination.next') }}</Button>
+      </div>
+    </template>
+
+    <template v-if="activeTab === 'advanced'">
       <Card>
         <CardHeader>
           <div class="flex items-center justify-between gap-2">
-            <CardTitle>{{ t('common.endpoints') }}</CardTitle>
+            <CardTitle>{{ t('admin.advancedJsonOverlay') }}</CardTitle>
             <div class="flex items-center gap-2">
-              <Button variant="outline" size="sm" @click="startCreate" :disabled="savingEndpoint">{{ t('admin.new') }}</Button>
-              <Button variant="outline" size="sm" @click="loadEndpoints" :disabled="loadingEndpoints || savingEndpoint">{{ t('common.refresh') }}</Button>
+              <Button variant="outline" size="sm" @click="loadManagedConfig" :disabled="loadingManaged || savingManaged || applyingManaged">{{ t('admin.reload') }}</Button>
+              <Button size="sm" @click="saveManagedConfig" :disabled="loadingManaged || savingManaged || applyingManaged">{{ t('admin.saveOverlay') }}</Button>
+              <Button variant="secondary" size="sm" @click="applyManagedConfig" :disabled="loadingManaged || savingManaged || applyingManaged">{{ t('admin.applyNow') }}</Button>
+              <Button variant="destructive" size="sm" @click="resetOverlay" :disabled="loadingManaged || savingManaged || applyingManaged">{{ t('admin.resetOverlay') }}</Button>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <p v-if="loadingEndpoints" class="text-sm text-muted-foreground">{{ t('admin.loadingEndpoints') }}</p>
-          <p v-else-if="endpoints.length === 0" class="text-sm text-muted-foreground">{{ t('admin.noEndpoints') }}</p>
-          <div v-else class="space-y-2">
-            <button
-              v-for="endpoint in endpoints"
-              :key="endpoint.key"
-              class="w-full text-left rounded-md border p-3 transition-colors hover:bg-accent"
-              :class="selectedKey === endpoint.key ? 'bg-accent border-primary' : ''"
-              @click="selectEndpoint(endpoint)"
-            >
-              <div class="flex items-center justify-between gap-2">
-                <p class="font-medium truncate">{{ endpoint.group ? `${endpoint.group} / ${endpoint.name}` : endpoint.name }}</p>
-                <span class="text-xs text-muted-foreground uppercase">{{ endpoint.type }}</span>
-              </div>
-              <p class="text-xs text-muted-foreground truncate mt-1">{{ endpoint.url }}</p>
-              <p class="text-xs text-muted-foreground mt-1">{{ t('admin.endpointKey', { key: endpoint.key }) }}</p>
-            </button>
-          </div>
+        <CardContent class="space-y-3">
+          <textarea
+            v-model="jsonText"
+            class="w-full min-h-[420px] rounded-md border bg-background p-3 font-mono text-xs"
+            spellcheck="false"
+          />
+          <span v-if="managedMessage" class="text-sm text-muted-foreground">{{ managedMessage }}</span>
         </CardContent>
       </Card>
+    </template>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{{ isEditing ? t('admin.editEndpoint', { key: selectedKey }) : t('admin.createEndpoint') }}</CardTitle>
-        </CardHeader>
-        <CardContent class="space-y-4">
-          <div class="grid gap-4 md:grid-cols-2">
-            <div class="space-y-1">
+    <div v-if="drawerOpen" class="fixed inset-0 z-50 flex justify-end bg-black/40" @click.self="closeDrawer">
+      <div class="h-full w-full md:w-[720px] bg-background border-l shadow-xl p-4 overflow-y-auto space-y-4">
+        <div class="flex items-center justify-between gap-2">
+          <h3 class="text-lg font-semibold">{{ drawerTitle }}</h3>
+          <Button size="sm" variant="outline" @click="closeDrawer">{{ t('adminV2.close') }}</Button>
+        </div>
+
+        <div class="grid gap-3 md:grid-cols-2">
+          <div>
+            <label class="text-sm font-medium">{{ t('common.type') }}</label>
+            <Select v-model="drawer.entityType" :options="entityTypeEditableOptions" :disabled="drawerMode === 'edit'" />
+          </div>
+          <div>
+            <label class="text-sm font-medium">{{ t('adminV2.mode') }}</label>
+            <Input :model-value="drawerMode" disabled />
+          </div>
+        </div>
+
+        <template v-if="drawer.entityType === 'endpoint'">
+          <div class="grid gap-3 md:grid-cols-2">
+            <div>
               <label class="text-sm font-medium">{{ t('common.name') }}</label>
-              <Input v-model="form.name" placeholder="frontend" />
+              <Input v-model="endpointForm.name" />
             </div>
-            <div class="space-y-1">
+            <div>
               <label class="text-sm font-medium">{{ t('common.group') }}</label>
-              <Input v-model="form.group" placeholder="core" />
+              <Input v-model="endpointForm.group" />
             </div>
-            <div class="space-y-1 md:col-span-2">
+            <div class="md:col-span-2">
               <label class="text-sm font-medium">{{ t('common.url') }}</label>
-              <Input v-model="form.url" placeholder="https://example.org/health" />
+              <Input v-model="endpointForm.url" />
             </div>
-            <div class="space-y-1">
+            <div>
               <label class="text-sm font-medium">{{ t('common.method') }}</label>
-              <Select v-model="form.method" :options="methodOptions" />
+              <Select v-model="endpointForm.method" :options="methodOptions" />
             </div>
-            <div class="space-y-1">
+            <div>
               <label class="text-sm font-medium">{{ t('common.interval') }}</label>
-              <Input v-model="form.interval" placeholder="30s / 1m / 5m" />
+              <Input v-model="endpointForm.interval" />
             </div>
           </div>
-
-          <div class="grid gap-4 md:grid-cols-2">
-            <div class="space-y-1">
-              <label class="text-sm font-medium">{{ t('admin.conditionsOnePerLine') }}</label>
-              <textarea
-                v-model="form.conditionsText"
-                class="w-full min-h-[180px] rounded-md border bg-background p-3 text-sm font-mono"
-                spellcheck="false"
-              />
-            </div>
-            <div class="space-y-1">
-              <label class="text-sm font-medium">{{ t('admin.headersKeyValue') }}</label>
-              <textarea
-                v-model="form.headersText"
-                class="w-full min-h-[180px] rounded-md border bg-background p-3 text-sm font-mono"
-                spellcheck="false"
-                placeholder="Authorization: Bearer token"
-              />
-            </div>
+          <div>
+            <label class="text-sm font-medium">{{ t('admin.conditionsOnePerLine') }}</label>
+            <textarea v-model="endpointForm.conditionsText" class="w-full min-h-[140px] rounded-md border bg-background p-2 text-sm font-mono" spellcheck="false" />
           </div>
-
-          <div class="space-y-1">
+          <div>
+            <label class="text-sm font-medium">{{ t('admin.headersKeyValue') }}</label>
+            <textarea v-model="endpointForm.headersText" class="w-full min-h-[120px] rounded-md border bg-background p-2 text-sm font-mono" spellcheck="false" />
+          </div>
+          <div>
             <label class="text-sm font-medium">{{ t('common.body') }}</label>
-            <textarea
-              v-model="form.body"
-              class="w-full min-h-[120px] rounded-md border bg-background p-3 text-sm font-mono"
-              spellcheck="false"
-            />
+            <textarea v-model="endpointForm.body" class="w-full min-h-[100px] rounded-md border bg-background p-2 text-sm font-mono" spellcheck="false" />
           </div>
-
-          <div class="flex flex-wrap items-center gap-4">
-            <label class="inline-flex items-center gap-2 text-sm">
-              <input v-model="form.enabled" type="checkbox" class="h-4 w-4 rounded border-input" />
+          <div class="grid gap-3 md:grid-cols-2">
+            <div>
+              <label class="text-sm font-medium">{{ t('adminV2.alertTypes') }}</label>
+              <Input v-model="endpointForm.alertTypes" :placeholder="t('adminV2.alertTypesPlaceholder')" />
+            </div>
+            <label class="inline-flex items-center gap-2 text-sm mt-6">
+              <input v-model="endpointForm.enabled" type="checkbox" class="h-4 w-4 rounded border-input" />
               {{ t('admin.enabled') }}
             </label>
-            <label class="inline-flex items-center gap-2 text-sm">
-              <input v-model="form.graphql" type="checkbox" class="h-4 w-4 rounded border-input" />
-              {{ t('admin.graphqlBody') }}
-            </label>
           </div>
+        </template>
 
-          <div class="flex flex-wrap items-center gap-2">
-            <Button @click="saveEndpoint" :disabled="savingEndpoint || loadingEndpoints">
-              {{ isEditing ? t('admin.saveEndpoint') : t('admin.createEndpointAction') }}
-            </Button>
-            <Button variant="outline" @click="startCreate" :disabled="savingEndpoint">{{ t('admin.clear') }}</Button>
-            <Button
-              v-if="isEditing"
-              variant="destructive"
-              @click="deleteEndpoint"
-              :disabled="savingEndpoint"
-            >
-              {{ t('admin.deleteEndpoint') }}
-            </Button>
-            <span v-if="endpointMessage" class="text-sm text-muted-foreground">{{ endpointMessage }}</span>
+        <template v-if="drawer.entityType === 'suite'">
+          <div class="grid gap-3 md:grid-cols-2">
+            <div>
+              <label class="text-sm font-medium">{{ t('common.name') }}</label>
+              <Input v-model="suiteForm.name" />
+            </div>
+            <div>
+              <label class="text-sm font-medium">{{ t('common.group') }}</label>
+              <Input v-model="suiteForm.group" />
+            </div>
+            <div>
+              <label class="text-sm font-medium">{{ t('common.interval') }}</label>
+              <Input v-model="suiteForm.interval" />
+            </div>
+            <div>
+              <label class="text-sm font-medium">{{ t('adminV2.timeout') }}</label>
+              <Input v-model="suiteForm.timeout" />
+            </div>
           </div>
-        </CardContent>
-      </Card>
+          <div>
+            <label class="text-sm font-medium">{{ t('adminV2.contextJson') }}</label>
+            <textarea v-model="suiteForm.contextJson" class="w-full min-h-[100px] rounded-md border bg-background p-2 text-sm font-mono" spellcheck="false" />
+          </div>
+          <div>
+            <label class="text-sm font-medium">{{ t('adminV2.suiteEndpointsJson') }}</label>
+            <textarea v-model="suiteForm.endpointsJson" class="w-full min-h-[220px] rounded-md border bg-background p-2 text-sm font-mono" spellcheck="false" />
+          </div>
+          <label class="inline-flex items-center gap-2 text-sm">
+            <input v-model="suiteForm.enabled" type="checkbox" class="h-4 w-4 rounded border-input" />
+            {{ t('admin.enabled') }}
+          </label>
+        </template>
+
+        <template v-if="drawer.entityType === 'external'">
+          <div class="grid gap-3 md:grid-cols-2">
+            <div>
+              <label class="text-sm font-medium">{{ t('common.name') }}</label>
+              <Input v-model="externalForm.name" />
+            </div>
+            <div>
+              <label class="text-sm font-medium">{{ t('common.group') }}</label>
+              <Input v-model="externalForm.group" />
+            </div>
+            <div class="md:col-span-2">
+              <label class="text-sm font-medium">{{ t('adminV2.token') }}</label>
+              <Input v-model="externalForm.token" />
+            </div>
+            <div>
+              <label class="text-sm font-medium">{{ t('adminV2.heartbeatInterval') }}</label>
+              <Input v-model="externalForm.heartbeatInterval" />
+            </div>
+            <div>
+              <label class="text-sm font-medium">{{ t('adminV2.alertTypes') }}</label>
+              <Input v-model="externalForm.alertTypes" :placeholder="t('adminV2.alertTypesPlaceholder')" />
+            </div>
+          </div>
+          <label class="inline-flex items-center gap-2 text-sm">
+            <input v-model="externalForm.enabled" type="checkbox" class="h-4 w-4 rounded border-input" />
+            {{ t('admin.enabled') }}
+          </label>
+        </template>
+
+        <div class="flex flex-wrap gap-2">
+          <Button @click="saveDrawer" :disabled="drawerSaving">{{ t('adminV2.save') }}</Button>
+          <Button variant="outline" @click="closeDrawer" :disabled="drawerSaving">{{ t('adminV2.cancel') }}</Button>
+          <Button v-if="drawerMode === 'edit'" variant="destructive" @click="deleteDrawer" :disabled="drawerSaving">{{ t('adminV2.delete') }}</Button>
+        </div>
+        <p v-if="drawerMessage" class="text-sm text-muted-foreground">{{ drawerMessage }}</p>
+      </div>
     </div>
 
-    <Card class="mt-6">
-      <CardHeader>
+    <div v-if="importExportOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="importExportOpen = false">
+      <div class="w-full max-w-5xl bg-background border rounded-lg shadow-xl p-4 max-h-[90vh] overflow-y-auto space-y-4">
         <div class="flex items-center justify-between gap-2">
-          <CardTitle>{{ t('admin.notificationChannels') }}</CardTitle>
-          <Button variant="outline" size="sm" @click="loadNotifications" :disabled="loadingNotifications || savingNotification">{{ t('common.refresh') }}</Button>
+          <h3 class="text-lg font-semibold">{{ t('adminV2.importExport') }}</h3>
+          <Button size="sm" variant="outline" @click="importExportOpen = false">{{ t('adminV2.close') }}</Button>
         </div>
-      </CardHeader>
-      <CardContent>
-        <div class="grid gap-6 lg:grid-cols-[22rem,1fr]">
-          <div class="space-y-2">
-            <p v-if="loadingNotifications" class="text-sm text-muted-foreground">{{ t('admin.loadingNotifications') }}</p>
-            <p v-else-if="notifications.length === 0" class="text-sm text-muted-foreground">{{ t('admin.noNotificationProvider') }}</p>
-            <button
-              v-for="notification in notifications"
-              :key="notification.type"
-              class="w-full text-left rounded-md border p-3 transition-colors hover:bg-accent"
-              :class="selectedNotificationType === notification.type ? 'bg-accent border-primary' : ''"
-              @click="selectNotification(notification)"
-            >
-              <div class="flex items-center justify-between gap-2">
-                <p class="font-medium truncate">{{ notification.type }}</p>
-                <span class="text-xs" :class="notification.configured ? 'text-green-600' : 'text-muted-foreground'">
-                  {{ notification.configured ? t('admin.configured') : t('admin.notConfigured') }}
-                </span>
-              </div>
-              <p class="text-xs text-muted-foreground mt-1">
-                {{ t('admin.usedBy', { endpoints: notification.usedByEndpoints, externalEndpoints: notification.usedByExternalEndpoints }) }}
-              </p>
-            </button>
-          </div>
 
-          <div class="space-y-3">
-            <p v-if="!selectedNotification" class="text-sm text-muted-foreground">{{ t('admin.selectNotificationType') }}</p>
-            <template v-else>
-              <div class="space-y-1">
-                <label class="text-sm font-medium">{{ t('common.type') }}</label>
-                <Input :model-value="selectedNotification.type" disabled />
-              </div>
-              <div class="space-y-1">
-                <label class="text-sm font-medium">{{ t('admin.providerConfigJson') }}</label>
-                <textarea
-                  v-model="notificationConfigText"
-                  class="w-full min-h-[240px] rounded-md border bg-background p-3 text-sm font-mono"
-                  spellcheck="false"
-                />
-              </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <Button @click="saveNotification" :disabled="savingNotification || loadingNotifications">{{ t('admin.saveNotification') }}</Button>
-                <Button
-                  variant="destructive"
-                  @click="deleteNotification"
-                  :disabled="savingNotification || !selectedNotification.configured"
-                >
-                  {{ t('admin.deleteNotification') }}
-                </Button>
-                <span v-if="notificationMessage" class="text-sm text-muted-foreground">{{ notificationMessage }}</span>
-              </div>
-            </template>
-          </div>
+        <div class="grid gap-3 md:grid-cols-4">
+          <Select v-model="importExport.entityType" :options="entityTypeOptions" />
+          <Select v-model="importExport.mode" :options="importModeOptions" />
+          <Button variant="outline" @click="loadExportData" :disabled="importExportLoading">{{ t('adminV2.exportData') }}</Button>
+          <Button @click="runImport(true)" :disabled="importExportLoading">{{ t('adminV2.dryRunImport') }}</Button>
         </div>
-      </CardContent>
-    </Card>
+        <div class="flex gap-2">
+          <Button @click="runImport(false)" :disabled="importExportLoading">{{ t('adminV2.applyImport') }}</Button>
+          <Button variant="outline" @click="copyExportToImport">{{ t('adminV2.copyExportToImport') }}</Button>
+        </div>
 
-    <Card class="mt-6">
-      <CardHeader>
-        <div class="flex items-center justify-between gap-2">
-          <CardTitle>{{ t('admin.advancedJsonOverlay') }}</CardTitle>
-          <div class="flex items-center gap-2">
-            <Button variant="outline" size="sm" @click="loadManagedConfig" :disabled="loadingManaged || savingManaged || applyingManaged">{{ t('admin.reload') }}</Button>
-            <Button size="sm" @click="saveManagedConfig" :disabled="loadingManaged || savingManaged || applyingManaged">{{ t('admin.saveOverlay') }}</Button>
-            <Button variant="secondary" size="sm" @click="applyManagedConfig" :disabled="loadingManaged || savingManaged || applyingManaged">{{ t('admin.applyNow') }}</Button>
-            <Button variant="destructive" size="sm" @click="resetOverlay" :disabled="loadingManaged || savingManaged || applyingManaged">{{ t('admin.resetOverlay') }}</Button>
+        <div class="grid gap-3 lg:grid-cols-2">
+          <div>
+            <label class="text-sm font-medium">{{ t('adminV2.exportJson') }}</label>
+            <textarea v-model="importExport.exportJson" class="w-full min-h-[320px] rounded-md border bg-background p-2 text-xs font-mono" spellcheck="false" />
+          </div>
+          <div>
+            <label class="text-sm font-medium">{{ t('adminV2.importJson') }}</label>
+            <textarea v-model="importExport.importJson" class="w-full min-h-[320px] rounded-md border bg-background p-2 text-xs font-mono" spellcheck="false" />
           </div>
         </div>
-      </CardHeader>
-      <CardContent class="space-y-3">
-        <textarea
-          v-model="jsonText"
-          class="w-full min-h-[420px] rounded-md border bg-background p-3 font-mono text-xs"
-          spellcheck="false"
-        />
-        <span v-if="managedMessage" class="text-sm text-muted-foreground">{{ managedMessage }}</span>
-      </CardContent>
-    </Card>
+        <p v-if="importExportMessage" class="text-sm text-muted-foreground">{{ importExportMessage }}</p>
+        <pre v-if="importPreview" class="text-xs bg-muted/40 p-3 rounded-md overflow-x-auto">{{ importPreview }}</pre>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -233,26 +422,113 @@ import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
 
-const endpoints = ref([])
-const selectedKey = ref('')
+const activeTab = ref('monitors')
 const overlayPath = ref('')
 
-const loadingEndpoints = ref(false)
-const savingEndpoint = ref(false)
-const endpointMessage = ref('')
+const filters = ref({
+  entityType: 'all',
+  q: '',
+  group: 'all',
+  enabled: 'all',
+  status: 'all',
+  sortBy: 'updatedAt',
+  sortDir: 'desc',
+  page: 1,
+  pageSize: '50',
+})
 
-const notifications = ref([])
-const selectedNotificationType = ref('')
-const notificationConfigText = ref('{}')
-const loadingNotifications = ref(false)
-const savingNotification = ref(false)
-const notificationMessage = ref('')
+const monitors = ref([])
+const monitorTotal = ref(0)
+const monitorsKpi = ref({ total: 0, unhealthy: 0, disabled: 0, unknown: 0 })
+const monitorGroups = ref([])
+const loadingMonitors = ref(false)
+
+const selectedKeys = ref([])
+const selectedKeySet = computed(() => new Set(selectedKeys.value))
+const allPageSelected = computed(() => monitors.value.length > 0 && monitors.value.every((item) => selectedKeySet.value.has(item.key)))
+
+const drawerOpen = ref(false)
+const drawerMode = ref('create')
+const drawerSaving = ref(false)
+const drawerMessage = ref('')
+const drawer = ref({
+  entityType: 'endpoint',
+  key: '',
+})
+
+const endpointForm = ref({
+  enabled: true,
+  name: '',
+  group: '',
+  url: '',
+  method: 'GET',
+  interval: '1m',
+  conditionsText: '[STATUS] == 200',
+  headersText: '',
+  body: '',
+  graphql: false,
+  alertTypes: '',
+})
+
+const suiteForm = ref({
+  enabled: true,
+  name: '',
+  group: '',
+  interval: '10m',
+  timeout: '5m',
+  contextJson: '{}',
+  endpointsJson: '[\n  {\n    "name": "step-1",\n    "url": "https://example.org/health",\n    "method": "GET",\n    "conditions": ["[STATUS] == 200"]\n  }\n]',
+})
+
+const externalForm = ref({
+  enabled: true,
+  name: '',
+  group: '',
+  token: '',
+  heartbeatInterval: '1m',
+  alertTypes: '',
+})
+
+const batch = ref({
+  action: 'enable',
+  group: '',
+  interval: '1m',
+  alertTypes: '',
+})
+const batchLoading = ref(false)
+const batchMessage = ref('')
+
+const auditFilters = ref({
+  page: 1,
+  pageSize: 20,
+  actor: '',
+  action: '',
+  result: 'all',
+  q: '',
+})
+const auditLogs = ref([])
+const auditTotal = ref(0)
+const loadingAudit = ref(false)
 
 const loadingManaged = ref(false)
 const savingManaged = ref(false)
 const applyingManaged = ref(false)
 const managedMessage = ref('')
 const jsonText = ref('')
+
+const importExportOpen = ref(false)
+const importExportLoading = ref(false)
+const importExport = ref({
+  entityType: 'all',
+  mode: 'merge',
+  exportJson: '',
+  importJson: '',
+})
+const importPreview = ref('')
+const importExportMessage = ref('')
+
+const monitorTotalPages = computed(() => Math.max(1, Math.ceil(monitorTotal.value / Number(filters.value.pageSize || 50))))
+const auditTotalPages = computed(() => Math.max(1, Math.ceil(auditTotal.value / auditFilters.value.pageSize)))
 
 const methodOptions = [
   { label: 'GET', value: 'GET' },
@@ -264,306 +540,575 @@ const methodOptions = [
   { label: 'OPTIONS', value: 'OPTIONS' },
 ]
 
-const createDefaultForm = () => ({
-  enabled: true,
-  name: '',
-  group: '',
-  url: '',
-  method: 'GET',
-  interval: '1m',
-  conditionsText: '[STATUS] == 200',
-  headersText: '',
-  body: '',
-  graphql: false,
+const entityTypeOptions = [
+  { label: t('adminV2.entityAll'), value: 'all' },
+  { label: t('adminV2.entityEndpoint'), value: 'endpoint' },
+  { label: t('adminV2.entitySuite'), value: 'suite' },
+  { label: t('adminV2.entityExternal'), value: 'external' },
+]
+
+const entityTypeEditableOptions = [
+  { label: t('adminV2.entityEndpoint'), value: 'endpoint' },
+  { label: t('adminV2.entitySuite'), value: 'suite' },
+  { label: t('adminV2.entityExternal'), value: 'external' },
+]
+
+const statusFilterOptions = [
+  { label: t('search.none'), value: 'all' },
+  { label: t('common.healthy'), value: 'healthy' },
+  { label: t('common.unhealthy'), value: 'unhealthy' },
+  { label: t('common.unknown'), value: 'unknown' },
+  { label: t('adminV2.statusDisabled'), value: 'disabled' },
+]
+
+const enabledFilterOptions = [
+  { label: t('search.none'), value: 'all' },
+  { label: t('common.yes'), value: 'true' },
+  { label: t('common.no'), value: 'false' },
+]
+
+const sortByOptions = [
+  { label: t('adminV2.sortUpdatedAt'), value: 'updatedAt' },
+  { label: t('search.name'), value: 'name' },
+  { label: t('search.group'), value: 'group' },
+  { label: t('search.health'), value: 'status' },
+  { label: t('common.interval'), value: 'interval' },
+  { label: t('common.duration'), value: 'duration' },
+]
+
+const sortDirOptions = [
+  { label: t('adminV2.sortDesc'), value: 'desc' },
+  { label: t('adminV2.sortAsc'), value: 'asc' },
+]
+
+const pageSizeOptions = [
+  { label: '20', value: '20' },
+  { label: '50', value: '50' },
+  { label: '100', value: '100' },
+  { label: '200', value: '200' },
+]
+
+const batchActionOptions = [
+  { label: t('adminV2.batchEnable'), value: 'enable' },
+  { label: t('adminV2.batchDisable'), value: 'disable' },
+  { label: t('adminV2.batchSetGroup'), value: 'set-group' },
+  { label: t('adminV2.batchSetInterval'), value: 'set-interval' },
+  { label: t('adminV2.batchSetAlertTypes'), value: 'set-alert-types' },
+  { label: t('adminV2.batchDelete'), value: 'delete' },
+]
+
+const auditResultOptions = [
+  { label: t('search.none'), value: 'all' },
+  { label: t('adminV2.resultSuccess'), value: 'success' },
+  { label: t('adminV2.resultFailure'), value: 'failure' },
+]
+
+const importModeOptions = [
+  { label: t('adminV2.importModeMerge'), value: 'merge' },
+  { label: t('adminV2.importModeReplace'), value: 'replace' },
+]
+
+const groupFilterOptions = computed(() => {
+  const options = [{ label: t('search.none'), value: 'all' }]
+  monitorGroups.value.forEach((group) => {
+    options.push({ label: group, value: group })
+  })
+  return options
 })
 
-const form = ref(createDefaultForm())
+const drawerTitle = computed(() => {
+  const mode = drawerMode.value === 'edit' ? t('adminV2.edit') : drawerMode.value === 'copy' ? t('adminV2.copy') : t('adminV2.create')
+  return `${mode} ${drawer.value.entityType}`
+})
 
-const isEditing = computed(() => selectedKey.value.length > 0)
-const selectedNotification = computed(() => notifications.value.find((notification) => notification.type === selectedNotificationType.value) || null)
-
-const normalizePayload = (payload) => {
-  const safe = payload && typeof payload === 'object' ? payload : {}
-  const normalizedAlerting = safe.alerting && typeof safe.alerting === 'object' && !Array.isArray(safe.alerting) ? safe.alerting : null
-  return {
-    alerting: normalizedAlerting,
-    endpoints: Array.isArray(safe.endpoints) ? safe.endpoints : [],
-    externalEndpoints: Array.isArray(safe.externalEndpoints) ? safe.externalEndpoints : [],
-    suites: Array.isArray(safe.suites) ? safe.suites : [],
-  }
+const onFilterChange = () => {
+  filters.value.page = 1
+  refreshMonitors()
 }
 
-const endpointToForm = (endpoint) => {
-  const headers = endpoint && endpoint.headers && typeof endpoint.headers === 'object' ? endpoint.headers : {}
-  const headerLines = Object.entries(headers).map(([name, value]) => `${name}: ${value}`)
-  const conditions = Array.isArray(endpoint.conditions) ? endpoint.conditions : []
-  return {
-    enabled: endpoint.enabled !== false,
-    name: endpoint.name || '',
-    group: endpoint.group || '',
-    url: endpoint.url || '',
-    method: endpoint.method || 'GET',
-    interval: endpoint.interval || '1m',
-    conditionsText: conditions.join('\n'),
-    headersText: headerLines.join('\n'),
-    body: endpoint.body || '',
-    graphql: endpoint.graphql === true,
-  }
-}
-
-const parseHeadersText = (headersText) => {
-  const headers = {}
-  for (const rawLine of headersText.split('\n')) {
-    const line = rawLine.trim()
-    if (!line) continue
-    const separatorIndex = line.indexOf(':')
-    if (separatorIndex < 1) {
-      throw new Error(t('admin.invalidHeader', { line }))
-    }
-    const name = line.slice(0, separatorIndex).trim()
-    const value = line.slice(separatorIndex + 1).trim()
-    if (!name) {
-      throw new Error(t('admin.invalidHeaderName', { line }))
-    }
-    headers[name] = value
-  }
-  return headers
-}
-
-const buildPayloadFromForm = () => {
-  const name = form.value.name.trim()
-  const url = form.value.url.trim()
-  const conditions = form.value.conditionsText
-    .split('\n')
-    .map((condition) => condition.trim())
-    .filter((condition) => condition.length > 0)
-  if (!name || !url) {
-    throw new Error(t('admin.nameUrlRequired'))
-  }
-  if (conditions.length === 0) {
-    throw new Error(t('admin.atLeastOneCondition'))
-  }
-  return {
-    enabled: form.value.enabled,
-    name,
-    group: form.value.group.trim(),
-    url,
-    method: form.value.method,
-    interval: form.value.interval.trim(),
-    conditions,
-    headers: parseHeadersText(form.value.headersText),
-    body: form.value.body,
-    graphql: form.value.graphql,
-  }
-}
-
-const startCreate = () => {
-  selectedKey.value = ''
-  form.value = createDefaultForm()
-  endpointMessage.value = ''
-}
-
-const selectEndpoint = (endpoint) => {
-  selectedKey.value = endpoint.key
-  form.value = endpointToForm(endpoint)
-  endpointMessage.value = ''
-}
-
-const selectNotification = (notification) => {
-  selectedNotificationType.value = notification.type
-  const configObject = notification.config && typeof notification.config === 'object' ? notification.config : {}
-  notificationConfigText.value = JSON.stringify(configObject, null, 2)
-  notificationMessage.value = ''
-}
-
-const loadEndpoints = async () => {
-  loadingEndpoints.value = true
-  endpointMessage.value = ''
+const refreshMonitors = async () => {
+  loadingMonitors.value = true
   try {
-    const response = await fetch('/api/v1/admin/endpoints', {
-      credentials: 'include',
+    const search = new URLSearchParams({
+      entityType: filters.value.entityType,
+      q: filters.value.q,
+      group: filters.value.group,
+      enabled: filters.value.enabled,
+      status: filters.value.status,
+      sortBy: filters.value.sortBy,
+      sortDir: filters.value.sortDir,
+      page: String(filters.value.page),
+      pageSize: String(filters.value.pageSize),
     })
+    const response = await fetch(`/api/v1/admin/monitors?${search.toString()}`, { credentials: 'include' })
     const data = await response.json()
     if (!response.ok) {
       throw new Error(data.error || t('admin.failedLoadEndpoints'))
     }
-    endpoints.value = Array.isArray(data.endpoints) ? data.endpoints : []
-    overlayPath.value = data.overlayPath || overlayPath.value
-    if (selectedKey.value) {
-      const selectedEndpoint = endpoints.value.find((endpoint) => endpoint.key === selectedKey.value)
-      if (selectedEndpoint) {
-        form.value = endpointToForm(selectedEndpoint)
-      } else {
-        startCreate()
-      }
+    monitors.value = Array.isArray(data.items) ? data.items : []
+    monitorTotal.value = Number(data.total || 0)
+    monitorsKpi.value = data.kpi || { total: 0, unhealthy: 0, disabled: 0, unknown: 0 }
+    monitorGroups.value = Array.isArray(data.groups) ? data.groups : []
+    if (filters.value.page > monitorTotalPages.value) {
+      filters.value.page = monitorTotalPages.value
     }
   } catch (error) {
-    endpointMessage.value = error.message
+    batchMessage.value = error.message
   } finally {
-    loadingEndpoints.value = false
+    loadingMonitors.value = false
   }
 }
 
-const saveEndpoint = async () => {
-  savingEndpoint.value = true
-  endpointMessage.value = ''
+const refreshAuditLogs = async () => {
+  loadingAudit.value = true
   try {
-    const payload = buildPayloadFromForm()
-    const targetURL = isEditing.value ? `/api/v1/admin/endpoints/${selectedKey.value}` : '/api/v1/admin/endpoints'
-    const method = isEditing.value ? 'PUT' : 'POST'
+    const search = new URLSearchParams({
+      page: String(auditFilters.value.page),
+      pageSize: String(auditFilters.value.pageSize),
+      actor: auditFilters.value.actor,
+      action: auditFilters.value.action,
+      result: auditFilters.value.result,
+      q: auditFilters.value.q,
+    })
+    const response = await fetch(`/api/v1/admin/audit-logs?${search.toString()}`, { credentials: 'include' })
+    const data = await response.json()
+    if (!response.ok) {
+      throw new Error(data.error || 'Failed to load audit logs')
+    }
+    auditLogs.value = Array.isArray(data.items) ? data.items : []
+    auditTotal.value = Number(data.total || 0)
+  } catch (error) {
+    managedMessage.value = error.message
+  } finally {
+    loadingAudit.value = false
+  }
+}
+
+const toggleSelection = (key, checked) => {
+  const set = new Set(selectedKeys.value)
+  if (checked) {
+    set.add(key)
+  } else {
+    set.delete(key)
+  }
+  selectedKeys.value = [...set]
+}
+
+const toggleAllPageSelection = (checked) => {
+  if (!checked) {
+    const set = new Set(selectedKeys.value)
+    monitors.value.forEach((monitor) => set.delete(monitor.key))
+    selectedKeys.value = [...set]
+    return
+  }
+  const set = new Set(selectedKeys.value)
+  monitors.value.forEach((monitor) => set.add(monitor.key))
+  selectedKeys.value = [...set]
+}
+
+const clearSelection = () => {
+  selectedKeys.value = []
+}
+
+const openCreate = (entityType) => {
+  drawer.value = { entityType, key: '' }
+  drawerMode.value = 'create'
+  resetForms()
+  drawerMessage.value = ''
+  drawerOpen.value = true
+}
+
+const openCopy = async (monitor) => {
+  await openEdit(monitor, true)
+}
+
+const openEdit = async (monitor, asCopy = false) => {
+  drawer.value = { entityType: monitor.entityType, key: monitor.key }
+  drawerMode.value = asCopy ? 'copy' : 'edit'
+  drawerMessage.value = ''
+  drawerOpen.value = true
+  await loadFormFromServer(monitor.entityType, monitor.key)
+  if (asCopy) {
+    if (monitor.entityType === 'endpoint') endpointForm.value.name = `${endpointForm.value.name}-copy`
+    if (monitor.entityType === 'suite') suiteForm.value.name = `${suiteForm.value.name}-copy`
+    if (monitor.entityType === 'external') externalForm.value.name = `${externalForm.value.name}-copy`
+  }
+}
+
+const closeDrawer = () => {
+  drawerOpen.value = false
+  drawerSaving.value = false
+  drawerMessage.value = ''
+}
+
+const resetForms = () => {
+  endpointForm.value = {
+    enabled: true,
+    name: '',
+    group: '',
+    url: '',
+    method: 'GET',
+    interval: '1m',
+    conditionsText: '[STATUS] == 200',
+    headersText: '',
+    body: '',
+    graphql: false,
+    alertTypes: '',
+  }
+  suiteForm.value = {
+    enabled: true,
+    name: '',
+    group: '',
+    interval: '10m',
+    timeout: '5m',
+    contextJson: '{}',
+    endpointsJson: '[\n  {\n    "name": "step-1",\n    "url": "https://example.org/health",\n    "method": "GET",\n    "conditions": ["[STATUS] == 200"]\n  }\n]',
+  }
+  externalForm.value = {
+    enabled: true,
+    name: '',
+    group: '',
+    token: '',
+    heartbeatInterval: '1m',
+    alertTypes: '',
+  }
+}
+
+const loadFormFromServer = async (entityType, key) => {
+  try {
+    if (entityType === 'endpoint') {
+      const response = await fetch('/api/v1/admin/endpoints', { credentials: 'include' })
+      const data = await response.json()
+      const endpoint = (data.endpoints || []).find((item) => item.key === key)
+      if (!endpoint) return
+      endpointForm.value = {
+        enabled: endpoint.enabled !== false,
+        name: endpoint.name || '',
+        group: endpoint.group || '',
+        url: endpoint.url || '',
+        method: endpoint.method || 'GET',
+        interval: endpoint.interval || '1m',
+        conditionsText: (endpoint.conditions || []).join('\n'),
+        headersText: Object.entries(endpoint.headers || {}).map(([headerName, headerValue]) => `${headerName}: ${headerValue}`).join('\n'),
+        body: endpoint.body || '',
+        graphql: endpoint.graphql === true,
+        alertTypes: (endpoint.alerts || []).map((item) => item.type).join(', '),
+      }
+      overlayPath.value = data.overlayPath || overlayPath.value
+      return
+    }
+    if (entityType === 'suite') {
+      const response = await fetch('/api/v1/admin/suites', { credentials: 'include' })
+      const data = await response.json()
+      const suite = (data.suites || []).find((item) => item.key === key)
+      if (!suite) return
+      suiteForm.value = {
+        enabled: suite.enabled !== false,
+        name: suite.name || '',
+        group: suite.group || '',
+        interval: suite.interval || '10m',
+        timeout: suite.timeout || '5m',
+        contextJson: JSON.stringify(suite.context || {}, null, 2),
+        endpointsJson: JSON.stringify(suite.endpoints || [], null, 2),
+      }
+      overlayPath.value = data.overlayPath || overlayPath.value
+      return
+    }
+    if (entityType === 'external') {
+      const response = await fetch('/api/v1/admin/external-endpoints', { credentials: 'include' })
+      const data = await response.json()
+      const externalEndpoint = (data.externalEndpoints || []).find((item) => item.key === key)
+      if (!externalEndpoint) return
+      externalForm.value = {
+        enabled: externalEndpoint.enabled !== false,
+        name: externalEndpoint.name || '',
+        group: externalEndpoint.group || '',
+        token: externalEndpoint.token || '',
+        heartbeatInterval: externalEndpoint.heartbeatInterval || '1m',
+        alertTypes: (externalEndpoint.alerts || []).map((item) => item.type).join(', '),
+      }
+      overlayPath.value = data.overlayPath || overlayPath.value
+    }
+  } catch (error) {
+    drawerMessage.value = error.message
+  }
+}
+
+const parseAlertTypes = (csv) => csv
+  .split(',')
+  .map((item) => item.trim())
+  .filter((item) => item.length > 0)
+  .map((type) => ({ type }))
+
+const parseHeaders = (text) => {
+  const headers = {}
+  text.split('\n').forEach((rawLine) => {
+    const line = rawLine.trim()
+    if (!line) return
+    const index = line.indexOf(':')
+    if (index <= 0) throw new Error(t('admin.invalidHeader', { line }))
+    const headerName = line.slice(0, index).trim()
+    const headerValue = line.slice(index + 1).trim()
+    headers[headerName] = headerValue
+  })
+  return headers
+}
+
+const buildDrawerPayload = () => {
+  if (drawer.value.entityType === 'endpoint') {
+    const conditions = endpointForm.value.conditionsText.split('\n').map((item) => item.trim()).filter((item) => item)
+    if (!endpointForm.value.name.trim() || !endpointForm.value.url.trim() || conditions.length === 0) {
+      throw new Error(t('admin.nameUrlRequired'))
+    }
+    return {
+      enabled: endpointForm.value.enabled,
+      name: endpointForm.value.name.trim(),
+      group: endpointForm.value.group.trim(),
+      url: endpointForm.value.url.trim(),
+      method: endpointForm.value.method,
+      interval: endpointForm.value.interval.trim(),
+      conditions,
+      headers: parseHeaders(endpointForm.value.headersText),
+      body: endpointForm.value.body,
+      graphql: endpointForm.value.graphql,
+      alerts: parseAlertTypes(endpointForm.value.alertTypes),
+    }
+  }
+
+  if (drawer.value.entityType === 'suite') {
+    const context = JSON.parse(suiteForm.value.contextJson || '{}')
+    const endpoints = JSON.parse(suiteForm.value.endpointsJson || '[]')
+    if (!Array.isArray(endpoints) || endpoints.length === 0) {
+      throw new Error(t('adminV2.suiteEndpointsRequired'))
+    }
+    return {
+      enabled: suiteForm.value.enabled,
+      name: suiteForm.value.name.trim(),
+      group: suiteForm.value.group.trim(),
+      interval: suiteForm.value.interval.trim(),
+      timeout: suiteForm.value.timeout.trim(),
+      context,
+      endpoints,
+    }
+  }
+
+  return {
+    enabled: externalForm.value.enabled,
+    name: externalForm.value.name.trim(),
+    group: externalForm.value.group.trim(),
+    token: externalForm.value.token.trim(),
+    heartbeatInterval: externalForm.value.heartbeatInterval.trim(),
+    alerts: parseAlertTypes(externalForm.value.alertTypes),
+  }
+}
+
+const saveDrawer = async () => {
+  drawerSaving.value = true
+  drawerMessage.value = ''
+  try {
+    const payload = buildDrawerPayload()
+    let basePath = '/api/v1/admin/endpoints'
+    if (drawer.value.entityType === 'suite') basePath = '/api/v1/admin/suites'
+    if (drawer.value.entityType === 'external') basePath = '/api/v1/admin/external-endpoints'
+
+    const isEdit = drawerMode.value === 'edit'
+    const method = isEdit ? 'PUT' : 'POST'
+    const targetURL = isEdit ? `${basePath}/${drawer.value.key}` : basePath
+
     const response = await fetch(targetURL, {
       method,
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(data.error || t('admin.failedSaveEndpoint'))
+    }
+    drawerMessage.value = t('admin.endpointSaved')
+    await refreshMonitors()
+    await refreshAuditLogs()
+    if (drawerMode.value !== 'edit') {
+      closeDrawer()
+    }
+  } catch (error) {
+    drawerMessage.value = error.message
+  } finally {
+    drawerSaving.value = false
+  }
+}
+
+const deleteDrawer = async () => {
+  if (drawerMode.value !== 'edit') return
+  if (!window.confirm(t('adminV2.confirmDelete'))) return
+  drawerSaving.value = true
+  drawerMessage.value = ''
+  try {
+    let basePath = '/api/v1/admin/endpoints'
+    if (drawer.value.entityType === 'suite') basePath = '/api/v1/admin/suites'
+    if (drawer.value.entityType === 'external') basePath = '/api/v1/admin/external-endpoints'
+    const response = await fetch(`${basePath}/${drawer.value.key}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    })
+    if (!response.ok && response.status !== 204) {
+      const data = await response.json().catch(() => ({}))
+      throw new Error(data.error || t('admin.failedDeleteEndpoint'))
+    }
+    closeDrawer()
+    await refreshMonitors()
+    await refreshAuditLogs()
+  } catch (error) {
+    drawerMessage.value = error.message
+  } finally {
+    drawerSaving.value = false
+  }
+}
+
+const deleteMonitor = async (monitor) => {
+  if (!window.confirm(t('adminV2.confirmDelete'))) return
+  try {
+    let basePath = '/api/v1/admin/endpoints'
+    if (monitor.entityType === 'suite') basePath = '/api/v1/admin/suites'
+    if (monitor.entityType === 'external') basePath = '/api/v1/admin/external-endpoints'
+    const response = await fetch(`${basePath}/${monitor.key}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    })
+    if (!response.ok && response.status !== 204) {
+      const data = await response.json().catch(() => ({}))
+      throw new Error(data.error || t('admin.failedDeleteEndpoint'))
+    }
+    await refreshMonitors()
+    await refreshAuditLogs()
+  } catch (error) {
+    batchMessage.value = error.message
+  }
+}
+
+const toggleEnabled = async (monitor) => {
+  try {
+    await openEdit(monitor)
+    if (drawer.value.entityType === 'endpoint') {
+      endpointForm.value.enabled = !endpointForm.value.enabled
+    } else if (drawer.value.entityType === 'suite') {
+      suiteForm.value.enabled = !suiteForm.value.enabled
+    } else {
+      externalForm.value.enabled = !externalForm.value.enabled
+    }
+    await saveDrawer()
+    closeDrawer()
+  } catch (error) {
+    batchMessage.value = error.message
+  }
+}
+
+const executeBatch = async (dryRun) => {
+  batchLoading.value = true
+  batchMessage.value = ''
+  try {
+    const payload = {}
+    if (batch.value.action === 'set-group') payload.group = batch.value.group
+    if (batch.value.action === 'set-interval') payload.interval = batch.value.interval
+    if (batch.value.action === 'set-alert-types') {
+      payload.alertTypes = batch.value.alertTypes.split(',').map((item) => item.trim()).filter((item) => item)
+    }
+
+    const response = await fetch('/api/v1/admin/monitors/batch', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        entityType: 'all',
+        keys: selectedKeys.value,
+        action: batch.value.action,
+        payload,
+        dryRun,
+      }),
     })
     const data = await response.json()
     if (!response.ok) {
       throw new Error(data.error || t('admin.failedSaveEndpoint'))
     }
-    selectedKey.value = data.key || selectedKey.value
-    await loadEndpoints()
-    endpointMessage.value = isEditing.value ? t('admin.endpointSaved') : t('admin.endpointCreated')
+    batchMessage.value = `${dryRun ? t('adminV2.dryRunDone') : t('adminV2.batchDone')} (${data.success}/${data.total})`
+    await refreshMonitors()
+    await refreshAuditLogs()
+    if (!dryRun) clearSelection()
   } catch (error) {
-    endpointMessage.value = error.message
+    batchMessage.value = error.message
   } finally {
-    savingEndpoint.value = false
+    batchLoading.value = false
   }
 }
 
-const deleteEndpoint = async () => {
-  if (!isEditing.value) return
-  const confirmed = window.confirm(t('admin.confirmDeleteEndpoint', { key: selectedKey.value }))
-  if (!confirmed) return
-  savingEndpoint.value = true
-  endpointMessage.value = ''
-  try {
-    const response = await fetch(`/api/v1/admin/endpoints/${selectedKey.value}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    })
-    if (!response.ok && response.status !== 204) {
-      let message = t('admin.failedDeleteEndpoint')
-      try {
-        const data = await response.json()
-        message = data.error || message
-      } catch {
-        // noop
-      }
-      throw new Error(message)
-    }
-    startCreate()
-    await loadEndpoints()
-    endpointMessage.value = t('admin.endpointDeleted')
-  } catch (error) {
-    endpointMessage.value = error.message
-  } finally {
-    savingEndpoint.value = false
-  }
+const openImportExport = () => {
+  importExportOpen.value = true
+  importExportMessage.value = ''
+  importPreview.value = ''
 }
 
-const loadNotifications = async () => {
-  loadingNotifications.value = true
-  notificationMessage.value = ''
+const loadExportData = async () => {
+  importExportLoading.value = true
+  importExportMessage.value = ''
   try {
-    const response = await fetch('/api/v1/admin/notifications', {
+    const response = await fetch(`/api/v1/admin/export?entityType=${importExport.value.entityType}`, {
       credentials: 'include',
     })
     const data = await response.json()
     if (!response.ok) {
-      throw new Error(data.error || t('admin.failedLoadNotifications'))
+      throw new Error(data.error || 'Export failed')
     }
-    notifications.value = Array.isArray(data.notifications) ? data.notifications : []
+    importExport.value.exportJson = JSON.stringify(data, null, 2)
     overlayPath.value = data.overlayPath || overlayPath.value
-    if (selectedNotificationType.value) {
-      const selected = notifications.value.find((notification) => notification.type === selectedNotificationType.value)
-      if (selected) {
-        selectNotification(selected)
-      } else if (notifications.value.length > 0) {
-        selectNotification(notifications.value[0])
-      } else {
-        selectedNotificationType.value = ''
-        notificationConfigText.value = '{}'
-      }
-    } else if (notifications.value.length > 0) {
-      selectNotification(notifications.value[0])
-    }
   } catch (error) {
-    notificationMessage.value = error.message
+    importExportMessage.value = error.message
   } finally {
-    loadingNotifications.value = false
+    importExportLoading.value = false
   }
 }
 
-const saveNotification = async () => {
-  if (!selectedNotification.value) {
-    notificationMessage.value = t('admin.selectNotificationFirst')
-    return
-  }
-  savingNotification.value = true
-  notificationMessage.value = ''
+const copyExportToImport = () => {
+  importExport.value.importJson = importExport.value.exportJson
+}
+
+const runImport = async (dryRun) => {
+  importExportLoading.value = true
+  importExportMessage.value = ''
+  importPreview.value = ''
   try {
-    const parsed = JSON.parse(notificationConfigText.value || '{}')
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new Error(t('admin.notificationConfigJsonObject'))
-    }
-    const response = await fetch(`/api/v1/admin/notifications/${selectedNotification.value.type}`, {
-      method: 'PUT',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
+    const parsed = JSON.parse(importExport.value.importJson || '{}')
+    const requestBody = {
+      entityType: importExport.value.entityType,
+      mode: importExport.value.mode,
+      dryRun,
+      data: {
+        alerting: parsed.alerting || null,
+        endpoints: Array.isArray(parsed.endpoints) ? parsed.endpoints : [],
+        externalEndpoints: Array.isArray(parsed.externalEndpoints) ? parsed.externalEndpoints : [],
+        suites: Array.isArray(parsed.suites) ? parsed.suites : [],
       },
-      body: JSON.stringify(parsed),
+    }
+    const response = await fetch('/api/v1/admin/import', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
     })
     const data = await response.json()
     if (!response.ok) {
-      throw new Error(data.error || t('admin.failedSaveNotification'))
+      throw new Error(data.error || 'Import failed')
     }
-    const currentType = selectedNotification.value.type
-    await loadNotifications()
-    const selected = notifications.value.find((notification) => notification.type === currentType)
-    if (selected) {
-      selectNotification(selected)
+    importPreview.value = JSON.stringify(data, null, 2)
+    importExportMessage.value = dryRun ? t('adminV2.dryRunDone') : t('adminV2.importDone')
+    if (!dryRun) {
+      await refreshMonitors()
+      await refreshAuditLogs()
+      await loadManagedConfig()
     }
-    notificationMessage.value = t('admin.notificationSaved')
   } catch (error) {
-    notificationMessage.value = error.message
+    importExportMessage.value = error.message
   } finally {
-    savingNotification.value = false
-  }
-}
-
-const deleteNotification = async () => {
-  if (!selectedNotification.value || !selectedNotification.value.configured) {
-    return
-  }
-  const confirmed = window.confirm(t('admin.confirmDeleteNotification', { type: selectedNotification.value.type }))
-  if (!confirmed) return
-  savingNotification.value = true
-  notificationMessage.value = ''
-  try {
-    const response = await fetch(`/api/v1/admin/notifications/${selectedNotification.value.type}`, {
-      method: 'DELETE',
-      credentials: 'include',
-    })
-    if (!response.ok && response.status !== 204) {
-      let message = t('admin.failedDeleteNotification')
-      try {
-        const data = await response.json()
-        message = data.error || message
-      } catch {
-        // noop
-      }
-      throw new Error(message)
-    }
-    await loadNotifications()
-    notificationMessage.value = t('admin.notificationDeleted')
-  } catch (error) {
-    notificationMessage.value = error.message
-  } finally {
-    savingNotification.value = false
+    importExportLoading.value = false
   }
 }
 
@@ -571,15 +1116,18 @@ const loadManagedConfig = async () => {
   loadingManaged.value = true
   managedMessage.value = ''
   try {
-    const response = await fetch('/api/v1/admin/managed-config', {
-      credentials: 'include',
-    })
+    const response = await fetch('/api/v1/admin/managed-config', { credentials: 'include' })
     const data = await response.json()
     if (!response.ok) {
       throw new Error(data.error || t('admin.failedLoadManagedConfig'))
     }
     overlayPath.value = data.overlayPath || overlayPath.value
-    jsonText.value = JSON.stringify(normalizePayload(data), null, 2)
+    jsonText.value = JSON.stringify({
+      alerting: data.alerting || null,
+      endpoints: data.endpoints || [],
+      externalEndpoints: data.externalEndpoints || [],
+      suites: data.suites || [],
+    }, null, 2)
   } catch (error) {
     managedMessage.value = error.message
   } finally {
@@ -591,14 +1139,11 @@ const saveManagedConfig = async () => {
   savingManaged.value = true
   managedMessage.value = ''
   try {
-    const parsed = JSON.parse(jsonText.value || '{}')
-    const payload = normalizePayload(parsed)
+    const payload = JSON.parse(jsonText.value || '{}')
     const response = await fetch('/api/v1/admin/managed-config', {
       method: 'PUT',
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
     const data = await response.json()
@@ -607,7 +1152,8 @@ const saveManagedConfig = async () => {
     }
     overlayPath.value = data.overlayPath || overlayPath.value
     managedMessage.value = data.message || t('admin.overlaySaved')
-    await Promise.all([loadEndpoints(), loadNotifications()])
+    await refreshMonitors()
+    await refreshAuditLogs()
   } catch (error) {
     managedMessage.value = error.message
   } finally {
@@ -628,7 +1174,7 @@ const applyManagedConfig = async () => {
       throw new Error(data.error || t('admin.failedApplyImmediately'))
     }
     managedMessage.value = data.message || t('admin.immediateReloadRequested')
-    await Promise.all([loadEndpoints(), loadNotifications()])
+    await refreshAuditLogs()
   } catch (error) {
     managedMessage.value = error.message
   } finally {
@@ -637,8 +1183,7 @@ const applyManagedConfig = async () => {
 }
 
 const resetOverlay = async () => {
-  const confirmed = window.confirm(t('admin.confirmResetOverlay'))
-  if (!confirmed) return
+  if (!window.confirm(t('admin.confirmResetOverlay'))) return
   savingManaged.value = true
   managedMessage.value = ''
   try {
@@ -647,18 +1192,13 @@ const resetOverlay = async () => {
       credentials: 'include',
     })
     if (!response.ok && response.status !== 204) {
-      let message = t('admin.failedResetOverlay')
-      try {
-        const data = await response.json()
-        message = data.error || message
-      } catch {
-        // noop
-      }
-      throw new Error(message)
+      const data = await response.json().catch(() => ({}))
+      throw new Error(data.error || t('admin.failedResetOverlay'))
     }
     managedMessage.value = t('admin.overlayDeletedHint')
-    startCreate()
-    await Promise.all([loadEndpoints(), loadNotifications(), loadManagedConfig()])
+    await loadManagedConfig()
+    await refreshMonitors()
+    await refreshAuditLogs()
   } catch (error) {
     managedMessage.value = error.message
   } finally {
@@ -666,7 +1206,21 @@ const resetOverlay = async () => {
   }
 }
 
+const formatDateTime = (value) => {
+  if (!value) return '-'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return '-'
+  return parsed.toLocaleString()
+}
+
+const statusClass = (status) => {
+  if (status === 'healthy') return 'bg-green-100 text-green-800'
+  if (status === 'unhealthy') return 'bg-red-100 text-red-800'
+  if (status === 'disabled') return 'bg-slate-100 text-slate-700'
+  return 'bg-amber-100 text-amber-800'
+}
+
 onMounted(async () => {
-  await Promise.all([loadEndpoints(), loadNotifications(), loadManagedConfig()])
+  await Promise.all([refreshMonitors(), refreshAuditLogs(), loadManagedConfig()])
 })
 </script>

@@ -139,34 +139,48 @@ func PutManagedConfiguration(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var payload ManagedConfigPayload
 		if err := c.BodyParser(&payload); err != nil {
+			writeAdminAudit(c, cfg, "update", "managed-config", "", nil, nil, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": "invalid payload: " + err.Error(),
 			})
 		}
 		candidate, err := loadManagedCandidate(cfg)
 		if err != nil {
+			writeAdminAudit(c, cfg, "update", "managed-config", "", payload, nil, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
+		}
+		before := ManagedConfigResponse{
+			OverlayPath:       candidate.ManagedOverlayPath(),
+			Alerting:          candidate.Alerting,
+			Endpoints:         candidate.Endpoints,
+			ExternalEndpoints: candidate.ExternalEndpoints,
+			Suites:            candidate.Suites,
 		}
 		candidate.Alerting = payload.Alerting
 		candidate.Endpoints = payload.Endpoints
 		candidate.ExternalEndpoints = payload.ExternalEndpoints
 		candidate.Suites = payload.Suites
 		if err := validateManagedPayload(candidate); err != nil {
+			writeAdminAudit(c, cfg, "update", "managed-config", "", before, payload, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
 		if err := persistManagedCandidateWithAlerting(cfg, candidate, true); err != nil {
+			writeAdminAudit(c, cfg, "update", "managed-config", "", before, payload, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
-		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		clearAdminDerivedCache()
+		response := fiber.Map{
 			"overlayPath": config.ResolveManagedOverlayPath(cfg.LoadedConfigPath()),
 			"message":     "Managed configuration saved. Gatus will apply it automatically within a few seconds.",
-		})
+		}
+		writeAdminAudit(c, cfg, "update", "managed-config", "", before, response, nil)
+		return c.Status(fiber.StatusOK).JSON(response)
 	}
 }
 
@@ -174,10 +188,13 @@ func DeleteManagedConfiguration(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		overlayPath := config.ResolveManagedOverlayPath(cfg.LoadedConfigPath())
 		if err := os.Remove(overlayPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			writeAdminAudit(c, cfg, "delete", "managed-config", "", nil, nil, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 				"error": err.Error(),
 			})
 		}
+		clearAdminDerivedCache()
+		writeAdminAudit(c, cfg, "delete", "managed-config", "", fiber.Map{"overlayPath": overlayPath}, nil, nil)
 		return c.SendStatus(fiber.StatusNoContent)
 	}
 }
