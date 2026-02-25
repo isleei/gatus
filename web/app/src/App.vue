@@ -56,6 +56,12 @@
               <!-- Navigation Links (Desktop) -->
               <nav class="hidden md:flex items-center gap-1">
                 <router-link
+                  to="/certificates"
+                  class="px-3 py-2 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
+                >
+                  {{ t('common.certificates') }}
+                </router-link>
+                <router-link
                   to="/admin"
                   class="px-3 py-2 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
                 >
@@ -101,6 +107,13 @@
                 <option value="en-US">{{ t('locale.english') }}</option>
               </select>
             </div>
+            <router-link
+              to="/certificates"
+              class="block px-3 py-2 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"
+              @click="mobileMenuOpen = false"
+            >
+              {{ t('common.certificates') }}
+            </router-link>
             <router-link
               to="/admin"
               class="block px-3 py-2 text-sm font-medium rounded-md hover:bg-accent hover:text-accent-foreground transition-colors"

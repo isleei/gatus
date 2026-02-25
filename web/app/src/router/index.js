@@ -3,6 +3,7 @@ import Home from '@/views/Home'
 import EndpointDetails from "@/views/EndpointDetails";
 import SuiteDetails from '@/views/SuiteDetails';
 import AdminPanel from '@/views/AdminPanel';
+import CertificateMonitor from '@/views/CertificateMonitor';
 
 const routes = [
     {
@@ -24,6 +25,11 @@ const routes = [
         path: '/admin',
         name: 'Admin',
         component: AdminPanel
+    },
+    {
+        path: '/certificates',
+        name: 'Certificates',
+        component: CertificateMonitor
     }
 ];
 

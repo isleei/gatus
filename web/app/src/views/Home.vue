@@ -33,6 +33,63 @@
           @update:sortBy="sortBy = $event"
           @initializeCollapsedGroups="initializeCollapsedGroups"
         />
+
+        <!-- Dashboard overview -->
+        <div v-if="!loading" class="mt-4 space-y-3">
+          <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="bg-card rounded-lg border p-4">
+              <p class="text-xs text-muted-foreground">{{ t('home.dashboardTotal') }}</p>
+              <p class="text-2xl font-semibold">{{ dashboardStats.total }}</p>
+              <p class="text-xs text-muted-foreground mt-1">{{ t('home.dashboardUnknown', { count: dashboardStats.unknown }) }}</p>
+            </div>
+            <div class="bg-card rounded-lg border p-4">
+              <p class="text-xs text-muted-foreground">{{ t('home.dashboardHealthy') }}</p>
+              <p class="text-2xl font-semibold text-green-600">{{ dashboardStats.healthy }}</p>
+            </div>
+            <div class="bg-card rounded-lg border p-4">
+              <p class="text-xs text-muted-foreground">{{ t('home.dashboardUnhealthy') }}</p>
+              <p class="text-2xl font-semibold text-red-600">{{ dashboardStats.unhealthy }}</p>
+            </div>
+            <div class="bg-card rounded-lg border p-4">
+              <p class="text-xs text-muted-foreground">{{ t('home.dashboardFailureRate') }}</p>
+              <p class="text-2xl font-semibold" :class="dashboardStats.unhealthy > 0 ? 'text-red-600' : 'text-green-600'">
+                {{ dashboardStats.failureRate }}%
+              </p>
+            </div>
+          </div>
+
+          <div
+            v-if="dashboardStats.total === 0"
+            class="rounded-lg border border-border bg-card px-4 py-3"
+          >
+            <p class="text-sm text-muted-foreground">{{ t('home.dashboardNoData') }}</p>
+          </div>
+          <div
+            v-else-if="dashboardStats.unhealthy > 0"
+            class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/50 dark:bg-red-900/20"
+          >
+            <div class="flex items-start gap-2">
+              <AlertTriangle class="h-4 w-4 mt-0.5 text-red-600 dark:text-red-300" />
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-red-700 dark:text-red-200">
+                  {{ t('home.dashboardUnhealthyAlert', { count: dashboardStats.unhealthy }) }}
+                </p>
+                <p v-if="unhealthyGroupsSummary" class="text-xs text-red-600 dark:text-red-300 mt-1 break-words">
+                  {{ t('home.dashboardUnhealthyGroups', { groups: unhealthyGroupsSummary }) }}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div
+            v-else
+            class="rounded-lg border border-green-200 bg-green-50 px-4 py-3 dark:border-green-900/50 dark:bg-green-900/20"
+          >
+            <div class="flex items-center gap-2">
+              <CheckCircle class="h-4 w-4 text-green-600 dark:text-green-300" />
+              <p class="text-sm font-medium text-green-700 dark:text-green-200">{{ t('home.dashboardAllHealthy') }}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div v-if="loading" class="flex items-center justify-center py-20">
@@ -183,7 +240,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { Activity, Timer, RefreshCw, AlertCircle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CheckCircle } from 'lucide-vue-next'
+import { Activity, Timer, RefreshCw, AlertCircle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, CheckCircle, AlertTriangle } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import EndpointCard from '@/components/EndpointCard.vue'
 import SuiteCard from '@/components/SuiteCard.vue'
@@ -227,6 +284,60 @@ const groupByGroup = ref(false)
 const sortBy = ref(localStorage.getItem('gatus:sort-by') || 'name')
 const uncollapsedGroups = ref(new Set())
 const resultPageSize = 50
+
+const getLatestSuccess = (item) => {
+  if (!item?.results || item.results.length === 0) {
+    return null
+  }
+  return Boolean(item.results[item.results.length - 1].success)
+}
+
+const dashboardStats = computed(() => {
+  const allItems = [...endpointStatuses.value, ...(suiteStatuses.value || [])]
+  const unhealthyGroups = new Map()
+
+  let healthy = 0
+  let unhealthy = 0
+  let unknown = 0
+
+  for (const item of allItems) {
+    const latestSuccess = getLatestSuccess(item)
+    if (latestSuccess === true) {
+      healthy++
+      continue
+    }
+    if (latestSuccess === false) {
+      unhealthy++
+      const groupName = item.group || t('home.noGroup')
+      unhealthyGroups.set(groupName, (unhealthyGroups.get(groupName) || 0) + 1)
+      continue
+    }
+    unknown++
+  }
+
+  const total = allItems.length
+  const failureRate = total > 0 ? Math.round((unhealthy / total) * 100) : 0
+
+  return {
+    total,
+    healthy,
+    unhealthy,
+    unknown,
+    failureRate,
+    unhealthyGroups: Array.from(unhealthyGroups.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+  }
+})
+
+const unhealthyGroupsSummary = computed(() => {
+  if (dashboardStats.value.unhealthyGroups.length === 0) {
+    return ''
+  }
+  return dashboardStats.value.unhealthyGroups
+    .map(([group, count]) => t('home.dashboardGroupWithCount', { group, count }))
+    .join(', ')
+})
 
 const filteredEndpoints = computed(() => {
   let filtered = [...endpointStatuses.value]
@@ -497,16 +608,13 @@ const showTooltip = (result, event, action = 'hover') => {
 
 const calculateUnhealthyCount = (endpoints) => {
   return endpoints.filter(endpoint => {
-    if (!endpoint.results || endpoint.results.length === 0) return false
-    const latestResult = endpoint.results[endpoint.results.length - 1]
-    return !latestResult.success
+    return getLatestSuccess(endpoint) === false
   }).length
 }
 
 const calculateFailingSuitesCount = (suites) => {
   return suites.filter(suite => {
-    if (!suite.results || suite.results.length === 0) return false
-    return !suite.results[suite.results.length - 1].success
+    return getLatestSuccess(suite) === false
   }).length
 }
 
