@@ -20,7 +20,10 @@
             <StatusBadge :status="currentHealthStatus" />
           </div>
 
-          <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div
+            class="grid gap-6 md:grid-cols-2"
+            :class="latestCertificateExpirationText ? 'lg:grid-cols-5' : 'lg:grid-cols-4'"
+          >
             <Card>
               <CardHeader class="pb-2">
                 <CardTitle class="text-sm font-medium text-muted-foreground">{{ t('endpointDetails.currentStatus') }}</CardTitle>
@@ -54,6 +57,47 @@
               </CardHeader>
               <CardContent>
                 <div class="text-2xl font-bold">{{ lastCheckTime }}</div>
+              </CardContent>
+            </Card>
+
+            <Card v-if="latestCertificateExpirationText">
+              <CardHeader class="pb-2">
+                <CardTitle class="text-sm font-medium text-muted-foreground">{{ t('endpointDetails.certificateExpiration') }}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div
+                  class="text-2xl font-bold"
+                  :class="latestCertificateExpirationSeconds < 0 ? 'text-red-600' : ''"
+                >
+                  {{ latestCertificateExpirationText }}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div v-if="showBodySizeCards" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <Card>
+              <CardHeader class="pb-2">
+                <CardTitle class="text-sm font-medium text-muted-foreground">{{ t('endpointDetails.bodySizeBytes') }}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div class="text-2xl font-bold">{{ latestBodySizeDisplay }}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader class="pb-2">
+                <CardTitle class="text-sm font-medium text-muted-foreground">{{ t('endpointDetails.bodySizeBaseline') }}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div class="text-2xl font-bold">{{ latestBodySizeBaselineDisplay }}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader class="pb-2">
+                <CardTitle class="text-sm font-medium text-muted-foreground">{{ t('endpointDetails.bodySizeDrift') }}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div class="text-2xl font-bold">{{ latestBodySizeDriftDisplay }}</div>
               </CardContent>
             </Card>
           </div>
@@ -212,7 +256,7 @@ import Settings from '@/components/Settings.vue'
 import Pagination from '@/components/Pagination.vue'
 import Loading from '@/components/Loading.vue'
 import ResponseTimeChart from '@/components/ResponseTimeChart.vue'
-import { generatePrettyTimeAgo, generatePrettyTimeDifference } from '@/utils/time'
+import { formatDurationFromSeconds, generatePrettyTimeAgo, generatePrettyTimeDifference } from '@/utils/time'
 import { getCurrentLocale, useI18n } from '@/i18n'
 
 const router = useRouter()
@@ -245,6 +289,70 @@ const currentHealthStatus = computed(() => {
 
 const hostname = computed(() => {
   return latestResult.value?.hostname || null
+})
+
+const latestCertificateExpirationSeconds = computed(() => {
+  const value = latestResult.value?.certificateExpirationSeconds
+  if (value === null || value === undefined) return null
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return null
+  return Math.trunc(numeric)
+})
+
+const latestCertificateExpirationText = computed(() => {
+  if (latestCertificateExpirationSeconds.value === null) return null
+  const duration = formatDurationFromSeconds(latestCertificateExpirationSeconds.value)
+  if (latestCertificateExpirationSeconds.value < 0) {
+    return t('endpointDetails.expiredFor', { duration })
+  }
+  return t('endpointDetails.expiresIn', { duration })
+})
+
+const latestBodySizeBytes = computed(() => {
+  const value = latestResult.value?.bodySizeBytes
+  if (value === null || value === undefined) return null
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return null
+  return Math.max(0, Math.trunc(numeric))
+})
+
+const latestBodySizeBaselineBytes = computed(() => {
+  const value = latestResult.value?.bodySizeBaselineBytes
+  if (value === null || value === undefined) return null
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return null
+  return Math.max(0, Math.trunc(numeric))
+})
+
+const latestBodySizeDriftPercent = computed(() => {
+  const value = latestResult.value?.bodySizeDriftPercent
+  if (value === null || value === undefined) return null
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return null
+  return Math.abs(numeric)
+})
+
+const showBodySizeCards = computed(() => {
+  return latestBodySizeBytes.value !== null || latestBodySizeBaselineBytes.value !== null || latestBodySizeDriftPercent.value !== null
+})
+
+const latestBodySizeDisplay = computed(() => {
+  if (latestBodySizeBytes.value === null) return t('common.noData')
+  return formatBytes(latestBodySizeBytes.value)
+})
+
+const latestBodySizeBaselineDisplay = computed(() => {
+  if (latestBodySizeBaselineBytes.value === null) {
+    return latestBodySizeBytes.value !== null ? t('endpointDetails.baselineBuilding') : t('common.noData')
+  }
+  return formatBytes(latestBodySizeBaselineBytes.value)
+})
+
+const latestBodySizeDriftDisplay = computed(() => {
+  if (latestBodySizeDriftPercent.value === null) {
+    return latestBodySizeBaselineBytes.value === null && latestBodySizeBytes.value !== null ? t('endpointDetails.baselineBuilding') : t('common.noData')
+  }
+  return `${latestBodySizeDriftPercent.value.toFixed(1)}%`
 })
 
 const toggleShowAverageResponseTime = () => {
@@ -387,6 +495,20 @@ const showTooltip = (result, event, action = 'hover') => {
 
 const prettifyTimestamp = (timestamp) => {
   return new Date(timestamp).toLocaleString(getCurrentLocale())
+}
+
+const formatBytes = (bytes) => {
+  const value = Number(bytes)
+  if (!Number.isFinite(value)) {
+    return t('common.noData')
+  }
+  if (value < 1024) {
+    return `${Math.trunc(value)} B`
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KB`
+  }
+  return `${(value / (1024 * 1024)).toFixed(1)} MB`
 }
 
 const generateHealthBadgeImageURL = () => {

@@ -28,7 +28,16 @@ func TestAdminV2SuitesAndExternalEndpointsCRUD(t *testing.T) {
       "url": "https://example.org/step-1",
       "method": "GET",
       "conditions": ["[STATUS] == 200"],
-      "alwaysRun": true
+      "alwaysRun": true,
+      "alerts": [
+        {
+          "type": "slack",
+          "minimumReminderInterval": "2h"
+        }
+      ],
+      "ui": {
+        "resolveSuccessfulConditions": true
+      }
     }
   ]
 }`
@@ -47,12 +56,24 @@ func TestAdminV2SuitesAndExternalEndpointsCRUD(t *testing.T) {
 	if !strings.Contains(body, `"core_checkout-flow"`) {
 		t.Fatalf("expected suite list to include created suite, got: %s", body)
 	}
+	if !strings.Contains(body, `"resolveSuccessfulConditions":true`) {
+		t.Fatalf("expected suite endpoint ui config in list response, got: %s", body)
+	}
+	if !strings.Contains(body, `"minimumReminderInterval":"2h0m0s"`) {
+		t.Fatalf("expected suite endpoint reminder interval in list response, got: %s", body)
+	}
 
 	createExternalPayload := `{
   "name": "worker-heartbeat",
   "group": "jobs",
   "token": "secret-token",
-  "heartbeatInterval": "30s"
+  "heartbeatInterval": "30s",
+  "alerts": [
+    {
+      "type": "slack",
+      "minimumReminderInterval": "30m"
+    }
+  ]
 }`
 	code, body = runAdminV2Request(t, router, http.MethodPost, "/api/v1/admin/external-endpoints", createExternalPayload)
 	if code != http.StatusCreated {
@@ -68,6 +89,9 @@ func TestAdminV2SuitesAndExternalEndpointsCRUD(t *testing.T) {
 	}
 	if !strings.Contains(body, `"jobs_worker-heartbeat"`) {
 		t.Fatalf("expected external endpoint list to include created endpoint, got: %s", body)
+	}
+	if !strings.Contains(body, `"minimumReminderInterval":"30m0s"`) {
+		t.Fatalf("expected external endpoint reminder interval in list response, got: %s", body)
 	}
 }
 

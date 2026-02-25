@@ -4,42 +4,72 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/TwiN/gatus/v5/client"
 	"github.com/TwiN/gatus/v5/config"
 	"github.com/TwiN/gatus/v5/config/endpoint"
 	"github.com/gofiber/fiber/v2"
 )
 
 type ManagedEndpointPayload struct {
-	Enabled    *bool                 `json:"enabled,omitempty"`
-	Name       string                `json:"name"`
-	Group      string                `json:"group,omitempty"`
-	URL        string                `json:"url"`
-	Method     string                `json:"method,omitempty"`
-	Body       string                `json:"body,omitempty"`
-	GraphQL    bool                  `json:"graphql,omitempty"`
-	Headers    map[string]string     `json:"headers,omitempty"`
-	Interval   string                `json:"interval,omitempty"`
-	Conditions []string              `json:"conditions"`
-	Alerts     []ManagedAlertPayload `json:"alerts,omitempty"`
+	Enabled     *bool                              `json:"enabled,omitempty"`
+	Name        string                             `json:"name"`
+	Group       string                             `json:"group,omitempty"`
+	URL         string                             `json:"url"`
+	Method      string                             `json:"method,omitempty"`
+	Body        string                             `json:"body,omitempty"`
+	GraphQL     bool                               `json:"graphql,omitempty"`
+	Headers     map[string]string                  `json:"headers,omitempty"`
+	Interval    string                             `json:"interval,omitempty"`
+	Conditions  []string                           `json:"conditions"`
+	Alerts      []ManagedAlertPayload              `json:"alerts,omitempty"`
+	UI          *ManagedEndpointUIConfigPayload    `json:"ui,omitempty"`
+	Client      *ManagedEndpointClientPayload      `json:"client,omitempty"`
+	Certificate *ManagedEndpointCertificatePayload `json:"certificate,omitempty"`
+	Tamper      *ManagedEndpointTamperPayload      `json:"tamper,omitempty"`
 }
 
 type ManagedEndpointResponse struct {
-	Key        string                `json:"key"`
-	Type       endpoint.Type         `json:"type"`
-	Enabled    *bool                 `json:"enabled,omitempty"`
-	Name       string                `json:"name"`
-	Group      string                `json:"group,omitempty"`
-	URL        string                `json:"url"`
-	Method     string                `json:"method,omitempty"`
-	Body       string                `json:"body,omitempty"`
-	GraphQL    bool                  `json:"graphql,omitempty"`
-	Headers    map[string]string     `json:"headers,omitempty"`
-	Interval   string                `json:"interval,omitempty"`
-	Conditions []string              `json:"conditions"`
-	Alerts     []ManagedAlertPayload `json:"alerts,omitempty"`
+	Key         string                             `json:"key"`
+	Type        endpoint.Type                      `json:"type"`
+	Enabled     *bool                              `json:"enabled,omitempty"`
+	Name        string                             `json:"name"`
+	Group       string                             `json:"group,omitempty"`
+	URL         string                             `json:"url"`
+	Method      string                             `json:"method,omitempty"`
+	Body        string                             `json:"body,omitempty"`
+	GraphQL     bool                               `json:"graphql,omitempty"`
+	Headers     map[string]string                  `json:"headers,omitempty"`
+	Interval    string                             `json:"interval,omitempty"`
+	Conditions  []string                           `json:"conditions"`
+	Alerts      []ManagedAlertPayload              `json:"alerts,omitempty"`
+	UI          *ManagedEndpointUIConfigPayload    `json:"ui,omitempty"`
+	Client      *ManagedEndpointClientPayload      `json:"client,omitempty"`
+	Certificate *ManagedEndpointCertificatePayload `json:"certificate,omitempty"`
+	Tamper      *ManagedEndpointTamperPayload      `json:"tamper,omitempty"`
+}
+
+type ManagedEndpointClientPayload struct {
+	Timeout        string `json:"timeout,omitempty"`
+	Insecure       *bool  `json:"insecure,omitempty"`
+	IgnoreRedirect *bool  `json:"ignoreRedirect,omitempty"`
+}
+
+type ManagedEndpointCertificatePayload struct {
+	Enabled             bool   `json:"enabled"`
+	ExpirationThreshold string `json:"expirationThreshold,omitempty"`
+}
+
+type ManagedEndpointTamperPayload struct {
+	Enabled               bool     `json:"enabled"`
+	BaselineSamples       int      `json:"baselineSamples,omitempty"`
+	DriftThresholdPercent int64    `json:"driftThresholdPercent,omitempty"`
+	ConsecutiveBreaches   int      `json:"consecutiveBreaches,omitempty"`
+	RequiredSubstrings    []string `json:"requiredSubstrings,omitempty"`
+	ForbiddenSubstrings   []string `json:"forbiddenSubstrings,omitempty"`
 }
 
 type ManagedEndpointListResponse struct {
@@ -217,19 +247,23 @@ func DeleteManagedEndpoint(cfg *config.Config) fiber.Handler {
 
 func toManagedEndpointResponse(monitoredEndpoint *endpoint.Endpoint) ManagedEndpointResponse {
 	response := ManagedEndpointResponse{
-		Key:        monitoredEndpoint.Key(),
-		Type:       monitoredEndpoint.Type(),
-		Enabled:    monitoredEndpoint.Enabled,
-		Name:       monitoredEndpoint.Name,
-		Group:      monitoredEndpoint.Group,
-		URL:        monitoredEndpoint.URL,
-		Method:     monitoredEndpoint.Method,
-		Body:       monitoredEndpoint.Body,
-		GraphQL:    monitoredEndpoint.GraphQL,
-		Headers:    make(map[string]string, len(monitoredEndpoint.Headers)),
-		Interval:   monitoredEndpoint.Interval.String(),
-		Conditions: make([]string, 0, len(monitoredEndpoint.Conditions)),
-		Alerts:     alertsToManagedPayload(monitoredEndpoint.Alerts),
+		Key:         monitoredEndpoint.Key(),
+		Type:        monitoredEndpoint.Type(),
+		Enabled:     monitoredEndpoint.Enabled,
+		Name:        monitoredEndpoint.Name,
+		Group:       monitoredEndpoint.Group,
+		URL:         monitoredEndpoint.URL,
+		Method:      monitoredEndpoint.Method,
+		Body:        monitoredEndpoint.Body,
+		GraphQL:     monitoredEndpoint.GraphQL,
+		Headers:     make(map[string]string, len(monitoredEndpoint.Headers)),
+		Interval:    monitoredEndpoint.Interval.String(),
+		Conditions:  make([]string, 0, len(monitoredEndpoint.Conditions)),
+		Alerts:      alertsToManagedPayload(monitoredEndpoint.Alerts),
+		UI:          managedEndpointUIConfigToPayload(monitoredEndpoint.UIConfig),
+		Client:      managedEndpointClientConfigToPayload(monitoredEndpoint.ClientConfig),
+		Certificate: managedEndpointCertificateToPayload(monitoredEndpoint.Conditions),
+		Tamper:      managedEndpointTamperToPayload(monitoredEndpoint.TamperConfig),
 	}
 	for headerName, headerValue := range monitoredEndpoint.Headers {
 		response.Headers[headerName] = headerValue
@@ -282,6 +316,37 @@ func applyManagedEndpointPayload(monitoredEndpoint *endpoint.Endpoint, payload *
 	if err != nil {
 		return err
 	}
+	if payload.Certificate != nil {
+		monitoredEndpoint.Conditions = removeManagedCertificateConditions(monitoredEndpoint.Conditions)
+		if payload.Certificate.Enabled {
+			threshold := strings.TrimSpace(payload.Certificate.ExpirationThreshold)
+			if len(threshold) == 0 {
+				return errors.New("certificate expiration threshold is required when certificate checks are enabled")
+			}
+			if _, err = time.ParseDuration(threshold); err != nil {
+				if _, parseIntErr := strconv.ParseInt(threshold, 10, 64); parseIntErr != nil {
+					return fmt.Errorf("invalid certificate expiration threshold: %w", err)
+				}
+			}
+			monitoredEndpoint.Conditions = append(monitoredEndpoint.Conditions, endpoint.Condition(fmt.Sprintf("%s > %s", endpoint.CertificateExpirationPlaceholder, threshold)))
+		}
+	}
+	if err = applyManagedEndpointClientPayload(monitoredEndpoint, payload.Client); err != nil {
+		return err
+	}
+	if payload.Tamper != nil {
+		monitoredEndpoint.TamperConfig = &endpoint.TamperConfig{
+			Enabled:               payload.Tamper.Enabled,
+			BaselineSamples:       payload.Tamper.BaselineSamples,
+			DriftThresholdPercent: payload.Tamper.DriftThresholdPercent,
+			ConsecutiveBreaches:   payload.Tamper.ConsecutiveBreaches,
+			RequiredSubstrings:    append([]string(nil), payload.Tamper.RequiredSubstrings...),
+			ForbiddenSubstrings:   append([]string(nil), payload.Tamper.ForbiddenSubstrings...),
+		}
+	}
+	if payload.UI != nil {
+		monitoredEndpoint.UIConfig = managedEndpointUIConfigFromPayload(payload.UI)
+	}
 	monitoredEndpoint.Alerts = parsedAlerts
 	return nil
 }
@@ -305,4 +370,98 @@ func findEndpointIndexByKey(endpoints []*endpoint.Endpoint, targetKey string) in
 		}
 	}
 	return -1
+}
+
+func managedEndpointClientConfigToPayload(config *client.Config) *ManagedEndpointClientPayload {
+	if config == nil {
+		return nil
+	}
+	return &ManagedEndpointClientPayload{
+		Timeout:        config.Timeout.String(),
+		Insecure:       boolPointer(config.Insecure),
+		IgnoreRedirect: boolPointer(config.IgnoreRedirect),
+	}
+}
+
+func applyManagedEndpointClientPayload(monitoredEndpoint *endpoint.Endpoint, payload *ManagedEndpointClientPayload) error {
+	if payload == nil {
+		return nil
+	}
+	if monitoredEndpoint.ClientConfig == nil {
+		monitoredEndpoint.ClientConfig = client.GetDefaultConfig()
+	}
+	if trimmedTimeout := strings.TrimSpace(payload.Timeout); len(trimmedTimeout) > 0 {
+		timeout, err := time.ParseDuration(trimmedTimeout)
+		if err != nil {
+			return fmt.Errorf("invalid client timeout: %w", err)
+		}
+		monitoredEndpoint.ClientConfig.Timeout = timeout
+	}
+	if payload.Insecure != nil {
+		monitoredEndpoint.ClientConfig.Insecure = *payload.Insecure
+	}
+	if payload.IgnoreRedirect != nil {
+		monitoredEndpoint.ClientConfig.IgnoreRedirect = *payload.IgnoreRedirect
+	}
+	return nil
+}
+
+func managedEndpointTamperToPayload(config *endpoint.TamperConfig) *ManagedEndpointTamperPayload {
+	if config == nil {
+		return nil
+	}
+	return &ManagedEndpointTamperPayload{
+		Enabled:               config.Enabled,
+		BaselineSamples:       config.BaselineSamples,
+		DriftThresholdPercent: config.DriftThresholdPercent,
+		ConsecutiveBreaches:   config.ConsecutiveBreaches,
+		RequiredSubstrings:    append([]string(nil), config.RequiredSubstrings...),
+		ForbiddenSubstrings:   append([]string(nil), config.ForbiddenSubstrings...),
+	}
+}
+
+func managedEndpointCertificateToPayload(conditions []endpoint.Condition) *ManagedEndpointCertificatePayload {
+	threshold, enabled := extractManagedCertificateThreshold(conditions)
+	return &ManagedEndpointCertificatePayload{
+		Enabled:             enabled,
+		ExpirationThreshold: threshold,
+	}
+}
+
+func extractManagedCertificateThreshold(conditions []endpoint.Condition) (string, bool) {
+	for _, condition := range conditions {
+		conditionText := strings.TrimSpace(string(condition))
+		parts := strings.Fields(conditionText)
+		if len(parts) < 3 {
+			continue
+		}
+		if !strings.EqualFold(parts[0], endpoint.CertificateExpirationPlaceholder) {
+			continue
+		}
+		operator := parts[1]
+		if operator != ">" && operator != ">=" {
+			continue
+		}
+		threshold := strings.TrimSpace(strings.Join(parts[2:], " "))
+		if len(threshold) == 0 {
+			continue
+		}
+		return threshold, true
+	}
+	return "", false
+}
+
+func removeManagedCertificateConditions(conditions []endpoint.Condition) []endpoint.Condition {
+	filtered := make([]endpoint.Condition, 0, len(conditions))
+	for _, condition := range conditions {
+		if strings.Contains(strings.ToUpper(string(condition)), endpoint.CertificateExpirationPlaceholder) {
+			continue
+		}
+		filtered = append(filtered, condition)
+	}
+	return filtered
+}
+
+func boolPointer(value bool) *bool {
+	return &value
 }

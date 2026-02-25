@@ -282,6 +282,74 @@
               <Input v-model="endpointForm.interval" />
             </div>
           </div>
+          <div class="grid gap-3 md:grid-cols-2">
+            <div class="space-y-2 rounded-md border p-3">
+              <p class="text-sm font-medium">{{ t('adminV2.probeSettings') }}</p>
+              <div>
+                <label class="text-xs text-muted-foreground">{{ t('adminV2.clientTimeout') }}</label>
+                <Input v-model="endpointForm.clientTimeout" />
+              </div>
+              <label class="inline-flex items-center gap-2 text-sm">
+                <input v-model="endpointForm.clientInsecure" type="checkbox" class="h-4 w-4 rounded border-input" />
+                {{ t('adminV2.clientInsecure') }}
+              </label>
+              <label class="inline-flex items-center gap-2 text-sm">
+                <input v-model="endpointForm.clientIgnoreRedirect" type="checkbox" class="h-4 w-4 rounded border-input" />
+                {{ t('adminV2.clientIgnoreRedirect') }}
+              </label>
+            </div>
+            <div class="space-y-2 rounded-md border p-3">
+              <p class="text-sm font-medium">{{ t('adminV2.certificateSettings') }}</p>
+              <label class="inline-flex items-center gap-2 text-sm">
+                <input v-model="endpointForm.certificateEnabled" type="checkbox" class="h-4 w-4 rounded border-input" />
+                {{ t('adminV2.certificateEnabled') }}
+              </label>
+              <div>
+                <label class="text-xs text-muted-foreground">{{ t('adminV2.certificateThreshold') }}</label>
+                <Input v-model="endpointForm.certificateExpirationThreshold" :disabled="!endpointForm.certificateEnabled" />
+              </div>
+              <p class="text-xs text-muted-foreground">{{ t('adminV2.certificateExpirationHint') }}</p>
+            </div>
+          </div>
+          <div class="space-y-2 rounded-md border p-3">
+            <p class="text-sm font-medium">{{ t('adminV2.tamperSettings') }}</p>
+            <div class="grid gap-3 md:grid-cols-4">
+              <label class="inline-flex items-center gap-2 text-sm md:col-span-4">
+                <input v-model="endpointForm.tamperEnabled" type="checkbox" class="h-4 w-4 rounded border-input" />
+                {{ t('adminV2.tamperEnabled') }}
+              </label>
+              <div>
+                <label class="text-xs text-muted-foreground">{{ t('adminV2.tamperBaselineSamples') }}</label>
+                <Input v-model="endpointForm.tamperBaselineSamples" type="number" min="1" :disabled="!endpointForm.tamperEnabled" />
+              </div>
+              <div>
+                <label class="text-xs text-muted-foreground">{{ t('adminV2.tamperDriftThreshold') }}</label>
+                <Input v-model="endpointForm.tamperDriftThresholdPercent" type="number" min="1" :disabled="!endpointForm.tamperEnabled" />
+              </div>
+              <div>
+                <label class="text-xs text-muted-foreground">{{ t('adminV2.tamperConsecutiveBreaches') }}</label>
+                <Input v-model="endpointForm.tamperConsecutiveBreaches" type="number" min="1" :disabled="!endpointForm.tamperEnabled" />
+              </div>
+              <div class="md:col-span-2">
+                <label class="text-xs text-muted-foreground">{{ t('adminV2.tamperRequiredSubstrings') }}</label>
+                <textarea
+                  v-model="endpointForm.tamperRequiredSubstringsText"
+                  class="mt-1 w-full min-h-[90px] rounded-md border bg-background p-2 text-sm font-mono"
+                  spellcheck="false"
+                  :disabled="!endpointForm.tamperEnabled"
+                />
+              </div>
+              <div class="md:col-span-2">
+                <label class="text-xs text-muted-foreground">{{ t('adminV2.tamperForbiddenSubstrings') }}</label>
+                <textarea
+                  v-model="endpointForm.tamperForbiddenSubstringsText"
+                  class="mt-1 w-full min-h-[90px] rounded-md border bg-background p-2 text-sm font-mono"
+                  spellcheck="false"
+                  :disabled="!endpointForm.tamperEnabled"
+                />
+              </div>
+            </div>
+          </div>
           <div>
             <label class="text-sm font-medium">{{ t('admin.conditionsOnePerLine') }}</label>
             <textarea v-model="endpointForm.conditionsText" class="w-full min-h-[140px] rounded-md border bg-background p-2 text-sm font-mono" spellcheck="false" />
@@ -296,13 +364,28 @@
           </div>
           <div class="grid gap-3 md:grid-cols-2">
             <div>
-              <label class="text-sm font-medium">{{ t('adminV2.alertTypes') }}</label>
-              <Input v-model="endpointForm.alertTypes" :placeholder="t('adminV2.alertTypesPlaceholder')" />
+              <label class="text-sm font-medium">{{ t('adminV2.alertsJson') }}</label>
+              <textarea
+                v-model="endpointForm.alertsJson"
+                class="w-full min-h-[120px] rounded-md border bg-background p-2 text-sm font-mono"
+                :placeholder="t('adminV2.alertsJsonPlaceholder')"
+                spellcheck="false"
+              />
             </div>
-            <label class="inline-flex items-center gap-2 text-sm mt-6">
-              <input v-model="endpointForm.enabled" type="checkbox" class="h-4 w-4 rounded border-input" />
-              {{ t('admin.enabled') }}
-            </label>
+            <div class="space-y-2 mt-1">
+              <label class="inline-flex items-center gap-2 text-sm">
+                <input v-model="endpointForm.resolveSuccessfulConditions" type="checkbox" class="h-4 w-4 rounded border-input" />
+                {{ t('adminV2.resolveSuccessfulConditions') }}
+              </label>
+              <label class="inline-flex items-center gap-2 text-sm">
+                <input v-model="endpointForm.dontResolveFailedConditions" type="checkbox" class="h-4 w-4 rounded border-input" />
+                {{ t('adminV2.dontResolveFailedConditions') }}
+              </label>
+              <label class="inline-flex items-center gap-2 text-sm">
+                <input v-model="endpointForm.enabled" type="checkbox" class="h-4 w-4 rounded border-input" />
+                {{ t('admin.enabled') }}
+              </label>
+            </div>
           </div>
         </template>
 
@@ -358,8 +441,13 @@
               <Input v-model="externalForm.heartbeatInterval" />
             </div>
             <div>
-              <label class="text-sm font-medium">{{ t('adminV2.alertTypes') }}</label>
-              <Input v-model="externalForm.alertTypes" :placeholder="t('adminV2.alertTypesPlaceholder')" />
+              <label class="text-sm font-medium">{{ t('adminV2.alertsJson') }}</label>
+              <textarea
+                v-model="externalForm.alertsJson"
+                class="w-full min-h-[120px] rounded-md border bg-background p-2 text-sm font-mono"
+                :placeholder="t('adminV2.alertsJsonPlaceholder')"
+                spellcheck="false"
+              />
             </div>
           </div>
           <label class="inline-flex items-center gap-2 text-sm">
@@ -467,7 +555,20 @@ const endpointForm = ref({
   headersText: '',
   body: '',
   graphql: false,
-  alertTypes: '',
+  alertsJson: '[]',
+  resolveSuccessfulConditions: false,
+  dontResolveFailedConditions: false,
+  clientTimeout: '10s',
+  clientInsecure: false,
+  clientIgnoreRedirect: false,
+  certificateEnabled: false,
+  certificateExpirationThreshold: '72h',
+  tamperEnabled: false,
+  tamperBaselineSamples: 20,
+  tamperDriftThresholdPercent: 20,
+  tamperConsecutiveBreaches: 3,
+  tamperRequiredSubstringsText: '',
+  tamperForbiddenSubstringsText: '',
 })
 
 const suiteForm = ref({
@@ -486,7 +587,7 @@ const externalForm = ref({
   group: '',
   token: '',
   heartbeatInterval: '1m',
-  alertTypes: '',
+  alertsJson: '[]',
 })
 
 const batch = ref({
@@ -753,7 +854,20 @@ const resetForms = () => {
     headersText: '',
     body: '',
     graphql: false,
-    alertTypes: '',
+    alertsJson: '[]',
+    resolveSuccessfulConditions: false,
+    dontResolveFailedConditions: false,
+    clientTimeout: '10s',
+    clientInsecure: false,
+    clientIgnoreRedirect: false,
+    certificateEnabled: false,
+    certificateExpirationThreshold: '72h',
+    tamperEnabled: false,
+    tamperBaselineSamples: 20,
+    tamperDriftThresholdPercent: 20,
+    tamperConsecutiveBreaches: 3,
+    tamperRequiredSubstringsText: '',
+    tamperForbiddenSubstringsText: '',
   }
   suiteForm.value = {
     enabled: true,
@@ -770,7 +884,7 @@ const resetForms = () => {
     group: '',
     token: '',
     heartbeatInterval: '1m',
-    alertTypes: '',
+    alertsJson: '[]',
   }
 }
 
@@ -792,7 +906,20 @@ const loadFormFromServer = async (entityType, key) => {
         headersText: Object.entries(endpoint.headers || {}).map(([headerName, headerValue]) => `${headerName}: ${headerValue}`).join('\n'),
         body: endpoint.body || '',
         graphql: endpoint.graphql === true,
-        alertTypes: (endpoint.alerts || []).map((item) => item.type).join(', '),
+        alertsJson: JSON.stringify(endpoint.alerts || [], null, 2),
+        resolveSuccessfulConditions: endpoint.ui?.resolveSuccessfulConditions === true,
+        dontResolveFailedConditions: endpoint.ui?.dontResolveFailedConditions === true,
+        clientTimeout: endpoint.client?.timeout || '10s',
+        clientInsecure: endpoint.client?.insecure === true,
+        clientIgnoreRedirect: endpoint.client?.ignoreRedirect === true,
+        certificateEnabled: endpoint.certificate?.enabled === true,
+        certificateExpirationThreshold: endpoint.certificate?.expirationThreshold || '72h',
+        tamperEnabled: endpoint.tamper?.enabled === true,
+        tamperBaselineSamples: endpoint.tamper?.baselineSamples || 20,
+        tamperDriftThresholdPercent: endpoint.tamper?.driftThresholdPercent || 20,
+        tamperConsecutiveBreaches: endpoint.tamper?.consecutiveBreaches || 3,
+        tamperRequiredSubstringsText: (endpoint.tamper?.requiredSubstrings || []).join('\n'),
+        tamperForbiddenSubstringsText: (endpoint.tamper?.forbiddenSubstrings || []).join('\n'),
       }
       overlayPath.value = data.overlayPath || overlayPath.value
       return
@@ -825,7 +952,7 @@ const loadFormFromServer = async (entityType, key) => {
         group: externalEndpoint.group || '',
         token: externalEndpoint.token || '',
         heartbeatInterval: externalEndpoint.heartbeatInterval || '1m',
-        alertTypes: (externalEndpoint.alerts || []).map((item) => item.type).join(', '),
+        alertsJson: JSON.stringify(externalEndpoint.alerts || [], null, 2),
       }
       overlayPath.value = data.overlayPath || overlayPath.value
     }
@@ -834,11 +961,20 @@ const loadFormFromServer = async (entityType, key) => {
   }
 }
 
-const parseAlertTypes = (csv) => csv
-  .split(',')
-  .map((item) => item.trim())
-  .filter((item) => item.length > 0)
-  .map((type) => ({ type }))
+const parseAlertsJSON = (text) => {
+  const trimmed = (text || '').trim()
+  if (!trimmed) return []
+  let parsed
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    throw new Error(t('adminV2.alertsJsonInvalid'))
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error(t('adminV2.alertsJsonInvalid'))
+  }
+  return parsed
+}
 
 const parseHeaders = (text) => {
   const headers = {}
@@ -860,6 +996,17 @@ const buildDrawerPayload = () => {
     if (!endpointForm.value.name.trim() || !endpointForm.value.url.trim() || conditions.length === 0) {
       throw new Error(t('admin.nameUrlRequired'))
     }
+    const tamperBaselineSamples = Math.max(1, Number.parseInt(endpointForm.value.tamperBaselineSamples, 10) || 20)
+    const tamperDriftThresholdPercent = Math.max(1, Number.parseInt(endpointForm.value.tamperDriftThresholdPercent, 10) || 20)
+    const tamperConsecutiveBreaches = Math.max(1, Number.parseInt(endpointForm.value.tamperConsecutiveBreaches, 10) || 3)
+    const tamperRequiredSubstrings = endpointForm.value.tamperRequiredSubstringsText
+      .split('\n')
+      .map((item) => item.trim())
+      .filter((item) => item)
+    const tamperForbiddenSubstrings = endpointForm.value.tamperForbiddenSubstringsText
+      .split('\n')
+      .map((item) => item.trim())
+      .filter((item) => item)
     return {
       enabled: endpointForm.value.enabled,
       name: endpointForm.value.name.trim(),
@@ -871,7 +1018,28 @@ const buildDrawerPayload = () => {
       headers: parseHeaders(endpointForm.value.headersText),
       body: endpointForm.value.body,
       graphql: endpointForm.value.graphql,
-      alerts: parseAlertTypes(endpointForm.value.alertTypes),
+      alerts: parseAlertsJSON(endpointForm.value.alertsJson),
+      ui: {
+        resolveSuccessfulConditions: endpointForm.value.resolveSuccessfulConditions,
+        dontResolveFailedConditions: endpointForm.value.dontResolveFailedConditions,
+      },
+      client: {
+        timeout: endpointForm.value.clientTimeout.trim(),
+        insecure: endpointForm.value.clientInsecure,
+        ignoreRedirect: endpointForm.value.clientIgnoreRedirect,
+      },
+      certificate: {
+        enabled: endpointForm.value.certificateEnabled,
+        expirationThreshold: endpointForm.value.certificateExpirationThreshold.trim(),
+      },
+      tamper: {
+        enabled: endpointForm.value.tamperEnabled,
+        baselineSamples: tamperBaselineSamples,
+        driftThresholdPercent: tamperDriftThresholdPercent,
+        consecutiveBreaches: tamperConsecutiveBreaches,
+        requiredSubstrings: tamperRequiredSubstrings,
+        forbiddenSubstrings: tamperForbiddenSubstrings,
+      },
     }
   }
 
@@ -898,7 +1066,7 @@ const buildDrawerPayload = () => {
     group: externalForm.value.group.trim(),
     token: externalForm.value.token.trim(),
     heartbeatInterval: externalForm.value.heartbeatInterval.trim(),
-    alerts: parseAlertTypes(externalForm.value.alertTypes),
+    alerts: parseAlertsJSON(externalForm.value.alertsJson),
   }
 }
 

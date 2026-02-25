@@ -47,6 +47,7 @@ func executeEndpoint(ep *endpoint.Endpoint, cfg *config.Config, extraLabels []st
 	}
 	logr.Debugf("[watchdog.executeEndpoint] Monitoring group=%s; endpoint=%s; key=%s", ep.Group, ep.Name, ep.Key())
 	result := ep.EvaluateHealth()
+	applyBodySizeTamperDetection(ep, result)
 	if cfg.Metrics {
 		metrics.PublishMetricsForEndpoint(ep, result, extraLabels)
 	}

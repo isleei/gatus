@@ -42,6 +42,19 @@ type Result struct {
 	// CertificateExpiration is the duration before the certificate expires
 	CertificateExpiration time.Duration `json:"-"`
 
+	// CertificateExpirationSeconds is the number of seconds before the certificate expires.
+	// Negative values indicate that the certificate is already expired.
+	CertificateExpirationSeconds *int64 `json:"certificateExpirationSeconds,omitempty"`
+
+	// BodySizeBytes is the response body size of this execution in bytes.
+	BodySizeBytes *int64 `json:"bodySizeBytes,omitempty"`
+
+	// BodySizeBaselineBytes is the rolling baseline body size in bytes.
+	BodySizeBaselineBytes *int64 `json:"bodySizeBaselineBytes,omitempty"`
+
+	// BodySizeDriftPercent is the absolute drift percentage between BodySizeBytes and BodySizeBaselineBytes.
+	BodySizeDriftPercent *float64 `json:"bodySizeDriftPercent,omitempty"`
+
 	// DomainExpiration is the duration before the domain expires
 	DomainExpiration time.Duration `json:"-"`
 

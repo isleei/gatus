@@ -130,6 +130,9 @@ type Endpoint struct {
 	// UIConfig is the configuration for the UI
 	UIConfig *ui.Config `yaml:"ui,omitempty"`
 
+	// TamperConfig is the configuration for body-size drift based tamper detection
+	TamperConfig *TamperConfig `yaml:"tamper,omitempty"`
+
 	// NumberOfFailuresInARow is the number of unsuccessful evaluations in a row
 	NumberOfFailuresInARow int `yaml:"-"`
 
@@ -138,6 +141,9 @@ type Endpoint struct {
 
 	// LastReminderSent is the time at which the last reminder was sent for this endpoint.
 	LastReminderSent time.Time `yaml:"-"`
+
+	// NumberOfBodySizeDriftBreachesInARow tracks body-size drift breaches in a row.
+	NumberOfBodySizeDriftBreachesInARow int `yaml:"-"`
 
 	///////////////////////
 	// SUITE-ONLY FIELDS //
@@ -209,6 +215,11 @@ func (e *Endpoint) ValidateAndSetDefaults() error {
 		e.UIConfig = ui.GetDefaultConfig()
 	} else {
 		if err := e.UIConfig.ValidateAndSetDefaults(); err != nil {
+			return err
+		}
+	}
+	if e.TamperConfig != nil {
+		if err := e.TamperConfig.ValidateAndSetDefaults(); err != nil {
 			return err
 		}
 	}
@@ -476,6 +487,8 @@ func (e *Endpoint) call(result *Result) {
 		}
 		result.Duration = time.Since(startTime)
 		result.CertificateExpiration = time.Until(certificate.NotAfter)
+		certificateExpirationSeconds := int64(result.CertificateExpiration.Seconds())
+		result.CertificateExpirationSeconds = &certificateExpirationSeconds
 	} else if endpointType == TypeTCP {
 		result.Connected, result.Body = client.CanCreateNetworkConnection("tcp", strings.TrimPrefix(e.URL, "tcp://"), e.getParsedBody(), e.ClientConfig)
 		result.Duration = time.Since(startTime)
@@ -554,6 +567,8 @@ func (e *Endpoint) call(result *Result) {
 		if response.TLS != nil && len(response.TLS.PeerCertificates) > 0 {
 			certificate = response.TLS.PeerCertificates[0]
 			result.CertificateExpiration = time.Until(certificate.NotAfter)
+			certificateExpirationSeconds := int64(result.CertificateExpiration.Seconds())
+			result.CertificateExpirationSeconds = &certificateExpirationSeconds
 		}
 		result.HTTPStatus = response.StatusCode
 		result.Connected = response.StatusCode > 0
@@ -590,6 +605,9 @@ func (e *Endpoint) buildHTTPRequest() *http.Request {
 
 // needsToReadBody checks if there's any condition or store mapping that requires the response Body to be read
 func (e *Endpoint) needsToReadBody() bool {
+	if e.TamperConfig != nil && e.TamperConfig.Enabled {
+		return true
+	}
 	for _, condition := range e.Conditions {
 		if condition.hasBodyPlaceholder() {
 			return true

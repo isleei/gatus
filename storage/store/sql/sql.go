@@ -809,8 +809,12 @@ func (s *Store) insertEndpointResultWithSuiteID(tx *sql.Tx, endpointID int64, re
 	var endpointResultID int64
 	err := tx.QueryRow(
 		`
-			INSERT INTO endpoint_results (endpoint_id, success, errors, connected, status, dns_rcode, certificate_expiration, domain_expiration, hostname, ip, duration, timestamp, suite_result_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			INSERT INTO endpoint_results (
+				endpoint_id, success, errors, connected, status, dns_rcode, certificate_expiration, domain_expiration,
+				body_size_bytes, body_size_baseline_bytes, body_size_drift_percent,
+				hostname, ip, duration, timestamp, suite_result_id
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 			RETURNING endpoint_result_id
 		`,
 		endpointID,
@@ -821,6 +825,9 @@ func (s *Store) insertEndpointResultWithSuiteID(tx *sql.Tx, endpointID int64, re
 		result.DNSRCode,
 		result.CertificateExpiration,
 		result.DomainExpiration,
+		result.BodySizeBytes,
+		result.BodySizeBaselineBytes,
+		result.BodySizeDriftPercent,
 		result.Hostname,
 		result.IP,
 		result.Duration,
@@ -977,7 +984,7 @@ func (s *Store) getEndpointEventsByEndpointID(tx *sql.Tx, endpointID int64, page
 func (s *Store) getEndpointResultsByEndpointID(tx *sql.Tx, endpointID int64, page, pageSize int) (results []*endpoint.Result, err error) {
 	rows, err := tx.Query(
 		`
-			SELECT endpoint_result_id, success, errors, connected, status, dns_rcode, certificate_expiration, domain_expiration, hostname, ip, duration, timestamp
+			SELECT endpoint_result_id, success, errors, connected, status, dns_rcode, certificate_expiration, domain_expiration, body_size_bytes, body_size_baseline_bytes, body_size_drift_percent, hostname, ip, duration, timestamp
 			FROM endpoint_results
 			WHERE endpoint_id = $1
 			ORDER BY endpoint_result_id DESC -- Normally, we'd sort by timestamp, but sorting by endpoint_result_id is faster
@@ -995,10 +1002,41 @@ func (s *Store) getEndpointResultsByEndpointID(tx *sql.Tx, endpointID int64, pag
 		result := &endpoint.Result{}
 		var id int64
 		var joinedErrors string
-		err = rows.Scan(&id, &result.Success, &joinedErrors, &result.Connected, &result.HTTPStatus, &result.DNSRCode, &result.CertificateExpiration, &result.DomainExpiration, &result.Hostname, &result.IP, &result.Duration, &result.Timestamp)
+		var bodySizeBytes sql.NullInt64
+		var bodySizeBaselineBytes sql.NullInt64
+		var bodySizeDriftPercent sql.NullFloat64
+		err = rows.Scan(
+			&id,
+			&result.Success,
+			&joinedErrors,
+			&result.Connected,
+			&result.HTTPStatus,
+			&result.DNSRCode,
+			&result.CertificateExpiration,
+			&result.DomainExpiration,
+			&bodySizeBytes,
+			&bodySizeBaselineBytes,
+			&bodySizeDriftPercent,
+			&result.Hostname,
+			&result.IP,
+			&result.Duration,
+			&result.Timestamp,
+		)
 		if err != nil {
 			logr.Errorf("[sql.getEndpointResultsByEndpointID] Silently failed to retrieve endpoint result for endpointID=%d: %s", endpointID, err.Error())
 			err = nil
+		}
+		if bodySizeBytes.Valid {
+			value := bodySizeBytes.Int64
+			result.BodySizeBytes = &value
+		}
+		if bodySizeBaselineBytes.Valid {
+			value := bodySizeBaselineBytes.Int64
+			result.BodySizeBaselineBytes = &value
+		}
+		if bodySizeDriftPercent.Valid {
+			value := bodySizeDriftPercent.Float64
+			result.BodySizeDriftPercent = &value
 		}
 		if len(joinedErrors) != 0 {
 			result.Errors = strings.Split(joinedErrors, arraySeparator)

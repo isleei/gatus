@@ -3,6 +3,7 @@ package sql
 import (
 	"errors"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -41,6 +42,9 @@ var (
 		Timestamp:             now,
 		Duration:              150 * time.Millisecond,
 		CertificateExpiration: 10 * time.Hour,
+		BodySizeBytes:         int64Pointer(1024),
+		BodySizeBaselineBytes: int64Pointer(1000),
+		BodySizeDriftPercent:  float64Pointer(2.4),
 		ConditionResults: []*endpoint.ConditionResult{
 			{
 				Condition: "[STATUS] == 200",
@@ -66,6 +70,9 @@ var (
 		Timestamp:             now,
 		Duration:              750 * time.Millisecond,
 		CertificateExpiration: 10 * time.Hour,
+		BodySizeBytes:         int64Pointer(700),
+		BodySizeBaselineBytes: int64Pointer(1000),
+		BodySizeDriftPercent:  float64Pointer(30),
 		ConditionResults: []*endpoint.ConditionResult{
 			{
 				Condition: "[STATUS] == 200",
@@ -409,6 +416,15 @@ func TestStore_Persistence(t *testing.T) {
 				}
 			}
 		}
+		if !nullableInt64PtrEquals(ssFromNewStore.Results[i].BodySizeBytes, ssFromOldStore.Results[i].BodySizeBytes) {
+			t.Error("new and old body size should've been the same")
+		}
+		if !nullableInt64PtrEquals(ssFromNewStore.Results[i].BodySizeBaselineBytes, ssFromOldStore.Results[i].BodySizeBaselineBytes) {
+			t.Error("new and old baseline body size should've been the same")
+		}
+		if !nullableFloat64PtrEquals(ssFromNewStore.Results[i].BodySizeDriftPercent, ssFromOldStore.Results[i].BodySizeDriftPercent) {
+			t.Error("new and old body size drift should've been the same")
+		}
 	}
 }
 
@@ -418,6 +434,28 @@ func TestStore_Save(t *testing.T) {
 	if store.Save() != nil {
 		t.Error("Save shouldn't do anything for this store")
 	}
+}
+
+func int64Pointer(value int64) *int64 {
+	return &value
+}
+
+func float64Pointer(value float64) *float64 {
+	return &value
+}
+
+func nullableInt64PtrEquals(first, second *int64) bool {
+	if first == nil || second == nil {
+		return first == nil && second == nil
+	}
+	return *first == *second
+}
+
+func nullableFloat64PtrEquals(first, second *float64) bool {
+	if first == nil || second == nil {
+		return first == nil && second == nil
+	}
+	return math.Abs(*first-*second) < 0.000001
 }
 
 // Note that are much more extensive tests in /storage/store/store_test.go.

@@ -63,6 +63,13 @@
           {{ Math.trunc(result.duration / 1000000) }}ms
         </div>
       </div>
+
+      <div v-if="hasCertificateExpiration">
+        <div class="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{{ t('common.certificateExpiration') }}</div>
+        <div class="font-mono text-xs" :class="certificateExpirationSeconds < 0 ? 'text-red-500' : ''">
+          {{ certificateExpirationText }}
+        </div>
+      </div>
       
       <!-- Conditions (for endpoint results) -->
       <div v-if="!isSuiteResult && result.conditionResults && result.conditionResults.length">
@@ -97,7 +104,7 @@
 <script setup>
 import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { prettifyTimestamp } from '@/utils/time'
+import { formatDurationFromSeconds, prettifyTimestamp } from '@/utils/time'
 import { useI18n } from '@/i18n'
 
 const route = useRoute()
@@ -138,6 +145,26 @@ const endpointCount = computed(() => {
 const successCount = computed(() => {
   if (!isSuiteResult.value || !props.result.endpointResults) return 0
   return props.result.endpointResults.filter(e => e.success).length
+})
+
+const certificateExpirationSeconds = computed(() => {
+  if (isSuiteResult.value || !props.result) return null
+  const value = props.result.certificateExpirationSeconds
+  if (value === null || value === undefined) return null
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return null
+  return Math.trunc(numeric)
+})
+
+const hasCertificateExpiration = computed(() => certificateExpirationSeconds.value !== null)
+
+const certificateExpirationText = computed(() => {
+  if (certificateExpirationSeconds.value === null) return t('common.noData')
+  const duration = formatDurationFromSeconds(certificateExpirationSeconds.value)
+  if (certificateExpirationSeconds.value < 0) {
+    return t('endpointDetails.expiredFor', { duration })
+  }
+  return t('endpointDetails.expiresIn', { duration })
 })
 
 // Methods are imported from utils/time

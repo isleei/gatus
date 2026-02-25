@@ -65,7 +65,11 @@ func persistManagedCandidateWithAlerting(cfg *config.Config, candidate *config.C
 	if persistAlerting {
 		overlay.Alerting = candidate.Alerting
 	}
-	return config.WriteManagedOverlay(cfg.LoadedConfigPath(), overlay)
+	if err = config.WriteManagedOverlay(cfg.LoadedConfigPath(), overlay); err != nil {
+		return err
+	}
+	config.RequestImmediateReload()
+	return nil
 }
 
 func validateManagedPayload(candidate *config.Config) error {
@@ -194,6 +198,7 @@ func DeleteManagedConfiguration(cfg *config.Config) fiber.Handler {
 			})
 		}
 		clearAdminDerivedCache()
+		config.RequestImmediateReload()
 		writeAdminAudit(c, cfg, "delete", "managed-config", "", fiber.Map{"overlayPath": overlayPath}, nil, nil)
 		return c.SendStatus(fiber.StatusNoContent)
 	}

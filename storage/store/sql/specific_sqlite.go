@@ -62,6 +62,9 @@ func (s *Store) createSQLiteSchema() error {
 			dns_rcode              TEXT      NOT NULL,
 			certificate_expiration INTEGER   NOT NULL,
 		    domain_expiration      INTEGER   NOT NULL,
+			body_size_bytes        INTEGER,
+			body_size_baseline_bytes INTEGER,
+			body_size_drift_percent REAL,
 			hostname               TEXT      NOT NULL,
 			ip                     TEXT      NOT NULL,
 			duration               INTEGER   NOT NULL,
@@ -186,6 +189,9 @@ func (s *Store) createSQLiteSchema() error {
 	}
 	// Silent table modifications TODO: Remove this in v6.0.0
 	_, _ = s.db.Exec(`ALTER TABLE endpoint_results ADD domain_expiration INTEGER NOT NULL DEFAULT 0`)
+	_, _ = s.db.Exec(`ALTER TABLE endpoint_results ADD body_size_bytes INTEGER`)
+	_, _ = s.db.Exec(`ALTER TABLE endpoint_results ADD body_size_baseline_bytes INTEGER`)
+	_, _ = s.db.Exec(`ALTER TABLE endpoint_results ADD body_size_drift_percent REAL`)
 	// Add suite_result_id to endpoint_results table for suite endpoint linkage
 	_, _ = s.db.Exec(`ALTER TABLE endpoint_results ADD suite_result_id INTEGER REFERENCES suite_results(suite_result_id) ON DELETE CASCADE`)
 	// Create index for suite_result_id

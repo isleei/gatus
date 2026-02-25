@@ -495,6 +495,29 @@ func TestEndpoint_ValidateAndSetDefaults(t *testing.T) {
 	}
 }
 
+func TestEndpoint_ValidateAndSetDefaultsWithTamperDefaults(t *testing.T) {
+	endpoint := Endpoint{
+		Name:       "tamper-defaults",
+		URL:        "https://example.org/health",
+		Conditions: []Condition{Condition("[STATUS] == 200")},
+		TamperConfig: &TamperConfig{
+			Enabled: true,
+		},
+	}
+	if err := endpoint.ValidateAndSetDefaults(); err != nil {
+		t.Fatalf("did not expect an error, got %v", err)
+	}
+	if endpoint.TamperConfig.BaselineSamples != DefaultTamperBaselineSamples {
+		t.Fatalf("expected baseline samples %d, got %d", DefaultTamperBaselineSamples, endpoint.TamperConfig.BaselineSamples)
+	}
+	if endpoint.TamperConfig.DriftThresholdPercent != DefaultTamperDriftThresholdPct {
+		t.Fatalf("expected drift threshold %d, got %d", DefaultTamperDriftThresholdPct, endpoint.TamperConfig.DriftThresholdPercent)
+	}
+	if endpoint.TamperConfig.ConsecutiveBreaches != DefaultTamperConsecutiveBreaches {
+		t.Fatalf("expected consecutive breaches %d, got %d", DefaultTamperConsecutiveBreaches, endpoint.TamperConfig.ConsecutiveBreaches)
+	}
+}
+
 func TestEndpoint_ValidateAndSetDefaultsWithInvalidCondition(t *testing.T) {
 	endpoint := Endpoint{
 		Name:       "invalid-condition",
@@ -1081,6 +1104,15 @@ func TestEndpoint_needsToReadBody(t *testing.T) {
 		Store:      nil,
 	}).needsToReadBody() {
 		t.Error("expected false when store is nil, got true")
+	}
+	// Tamper detection should force response body reads even without [BODY] conditions
+	if !(&Endpoint{
+		Conditions: []Condition{statusCondition},
+		TamperConfig: &TamperConfig{
+			Enabled: true,
+		},
+	}).needsToReadBody() {
+		t.Error("expected true when tamper detection is enabled, got false")
 	}
 }
 

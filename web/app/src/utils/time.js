@@ -58,6 +58,41 @@ export const generatePrettyTimeDifference = (start, end) => {
 }
 
 /**
+ * Formats a duration in seconds to a localized compact human-readable string.
+ * @param {number} seconds - Duration in seconds (can be negative)
+ * @returns {string} Formatted duration string
+ */
+export const formatDurationFromSeconds = (seconds) => {
+  const numeric = Number(seconds)
+  if (!Number.isFinite(numeric)) {
+    return translate('common.noData')
+  }
+  const absoluteSeconds = Math.abs(Math.trunc(numeric))
+  const days = Math.floor(absoluteSeconds / 86400)
+  const hours = Math.floor((absoluteSeconds % 86400) / 3600)
+  const minutes = Math.floor((absoluteSeconds % 3600) / 60)
+
+  if (days > 0) {
+    const dayText = translate(days === 1 ? 'time.day' : 'time.days', { value: days })
+    if (hours > 0) {
+      return `${dayText} ${translate(hours === 1 ? 'time.hour' : 'time.hours', { value: hours })}`
+    }
+    return dayText
+  }
+  if (hours > 0) {
+    const hourText = translate(hours === 1 ? 'time.hour' : 'time.hours', { value: hours })
+    if (minutes > 0) {
+      return `${hourText} ${translate(minutes === 1 ? 'time.minute' : 'time.minutes', { value: minutes })}`
+    }
+    return hourText
+  }
+  if (minutes > 0) {
+    return translate(minutes === 1 ? 'time.minute' : 'time.minutes', { value: minutes })
+  }
+  return translate(absoluteSeconds === 1 ? 'time.second' : 'time.seconds', { value: absoluteSeconds })
+}
+
+/**
  * Formats a timestamp into YYYY-MM-DD HH:mm:ss format
  * @param {string|Date} timestamp - The timestamp to format
  * @returns {string} Formatted timestamp

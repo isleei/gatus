@@ -62,6 +62,9 @@ func (s *Store) createPostgresSchema() error {
 			dns_rcode              TEXT      NOT NULL,
 			certificate_expiration BIGINT    NOT NULL,
 			domain_expiration      BIGINT    NOT NULL,
+			body_size_bytes        BIGINT,
+			body_size_baseline_bytes BIGINT,
+			body_size_drift_percent DOUBLE PRECISION,
 			hostname               TEXT      NOT NULL,
 			ip                     TEXT      NOT NULL,
 			duration               BIGINT    NOT NULL,
@@ -167,6 +170,9 @@ func (s *Store) createPostgresSchema() error {
 	}
 	// Silent table modifications TODO: Remove this in v6.0.0
 	_, _ = s.db.Exec(`ALTER TABLE endpoint_results ADD IF NOT EXISTS domain_expiration BIGINT NOT NULL DEFAULT 0`)
+	_, _ = s.db.Exec(`ALTER TABLE endpoint_results ADD COLUMN IF NOT EXISTS body_size_bytes BIGINT`)
+	_, _ = s.db.Exec(`ALTER TABLE endpoint_results ADD COLUMN IF NOT EXISTS body_size_baseline_bytes BIGINT`)
+	_, _ = s.db.Exec(`ALTER TABLE endpoint_results ADD COLUMN IF NOT EXISTS body_size_drift_percent DOUBLE PRECISION`)
 	// Add suite_result_id to endpoint_results table for suite endpoint linkage
 	_, _ = s.db.Exec(`ALTER TABLE endpoint_results ADD COLUMN IF NOT EXISTS suite_result_id BIGINT REFERENCES suite_results(suite_result_id) ON DELETE CASCADE`)
 	// Create index for suite_result_id

@@ -14,18 +14,19 @@ import (
 )
 
 type ManagedSuiteEndpointPayload struct {
-	Enabled    *bool                 `json:"enabled,omitempty"`
-	Name       string                `json:"name"`
-	URL        string                `json:"url"`
-	Method     string                `json:"method,omitempty"`
-	Body       string                `json:"body,omitempty"`
-	GraphQL    bool                  `json:"graphql,omitempty"`
-	Headers    map[string]string     `json:"headers,omitempty"`
-	Interval   string                `json:"interval,omitempty"`
-	Conditions []string              `json:"conditions"`
-	Store      map[string]string     `json:"store,omitempty"`
-	AlwaysRun  bool                  `json:"alwaysRun,omitempty"`
-	Alerts     []ManagedAlertPayload `json:"alerts,omitempty"`
+	Enabled    *bool                           `json:"enabled,omitempty"`
+	Name       string                          `json:"name"`
+	URL        string                          `json:"url"`
+	Method     string                          `json:"method,omitempty"`
+	Body       string                          `json:"body,omitempty"`
+	GraphQL    bool                            `json:"graphql,omitempty"`
+	Headers    map[string]string               `json:"headers,omitempty"`
+	Interval   string                          `json:"interval,omitempty"`
+	Conditions []string                        `json:"conditions"`
+	Store      map[string]string               `json:"store,omitempty"`
+	AlwaysRun  bool                            `json:"alwaysRun,omitempty"`
+	Alerts     []ManagedAlertPayload           `json:"alerts,omitempty"`
+	UI         *ManagedEndpointUIConfigPayload `json:"ui,omitempty"`
 }
 
 type ManagedSuitePayload struct {
@@ -226,6 +227,7 @@ func toManagedSuiteResponse(monitoredSuite *suite.Suite) ManagedSuiteResponse {
 			Store:      storeMap,
 			AlwaysRun:  endpointConfig.AlwaysRun,
 			Alerts:     alertsToManagedPayload(endpointConfig.Alerts),
+			UI:         managedEndpointUIConfigToPayload(endpointConfig.UIConfig),
 		})
 	}
 	return response
@@ -290,6 +292,7 @@ func applyManagedSuitePayload(monitoredSuite *suite.Suite, payload *ManagedSuite
 			Store:      storeMap,
 			AlwaysRun:  endpointPayload.AlwaysRun,
 			Alerts:     alerts,
+			UIConfig:   managedEndpointUIConfigFromPayload(endpointPayload.UI),
 		})
 	}
 	contextMap := make(map[string]interface{}, len(payload.Context))

@@ -21,8 +21,16 @@
             <span v-if="hostname" class="truncate" :title="hostname">{{ hostname }}</span>
           </div>
         </div>
-        <div class="flex-shrink-0 ml-2">
+        <div class="flex-shrink-0 ml-2 flex flex-col items-end gap-1">
           <StatusBadge :status="currentStatus" />
+          <span
+            v-if="certificateExpirationText"
+            class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
+            :class="certificateExpirationSeconds < 0 ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'"
+            :title="certificateExpirationText"
+          >
+            {{ certificateExpirationText }}
+          </span>
         </div>
       </div>
     </CardHeader>
@@ -66,7 +74,7 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import StatusBadge from '@/components/StatusBadge.vue'
-import { generatePrettyTimeAgo } from '@/utils/time'
+import { formatDurationFromSeconds, generatePrettyTimeAgo } from '@/utils/time'
 import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
@@ -107,6 +115,23 @@ const currentStatus = computed(() => {
 
 const hostname = computed(() => {
   return latestResult.value?.hostname || null
+})
+
+const certificateExpirationSeconds = computed(() => {
+  const value = latestResult.value?.certificateExpirationSeconds
+  if (value === null || value === undefined) return null
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return null
+  return Math.trunc(numeric)
+})
+
+const certificateExpirationText = computed(() => {
+  if (certificateExpirationSeconds.value === null) return null
+  const duration = formatDurationFromSeconds(certificateExpirationSeconds.value)
+  if (certificateExpirationSeconds.value < 0) {
+    return t('endpointCard.certificateExpiredFor', { duration })
+  }
+  return t('endpointCard.certificateExpiresIn', { duration })
 })
 
 const displayResults = computed(() => {
