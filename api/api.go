@@ -91,6 +91,7 @@ func (a *API) createRouter(cfg *config.Config) *fiber.App {
 	app.Get("/", SinglePageApplication(cfg.UI))
 	app.Get("/endpoints/:key", SinglePageApplication(cfg.UI))
 	app.Get("/suites/:key", SinglePageApplication(cfg.UI))
+	app.Get("/certificates", SinglePageApplication(cfg.UI))
 	adminRouter := app.Group("/admin")
 	if cfg.Security != nil {
 		if err := cfg.Security.ApplySecurityMiddleware(adminRouter); err != nil {

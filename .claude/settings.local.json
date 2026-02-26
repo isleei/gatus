@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(go vet:*)",
+      "Bash(grep:*)",
+      "Bash(find .:*)",
+      "Bash(go list:*)",
+      "Bash(go test:*)",
+      "Bash(npm:*)",
+      "Bash(go build:*)"
     ]
   }
 }

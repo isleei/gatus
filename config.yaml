@@ -1,3 +1,13 @@
+storage:
+  type: postgres
+  path: "postgres://gatus:3TNdx2DSbKNST75H@192.168.2.32:5432/gatus?sslmode=disable"
+  caching: true
+
+security:
+  basic:
+    username: "admin"
+    password-bcrypt-base64: "JDJhJDA4JC82VHZtbGtpdkJjT3pzSnN0V1o4U3VKaXMyNzlFWkNaZXI1MUNQYkJQZ2xVYUtYeC4zdFVp"
+
 endpoints:
   - name: front-end
     group: core
@@ -7,6 +17,8 @@ endpoints:
       - "[STATUS] == 200"
       - "[BODY].status == UP"
       - "[RESPONSE_TIME] < 150"
+    alerts:
+      - type: wecom
 
   - name: back-end
     group: core
@@ -15,6 +27,8 @@ endpoints:
     conditions:
       - "[STATUS] == 200"
       - "[CERTIFICATE_EXPIRATION] > 48h"
+    alerts:
+      - type: wecom
 
   - name: monitoring
     group: internal
@@ -22,6 +36,8 @@ endpoints:
     interval: 5m
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: wecom
 
   - name: nas
     group: internal
@@ -29,6 +45,8 @@ endpoints:
     interval: 5m
     conditions:
       - "[STATUS] == 200"
+    alerts:
+      - type: wecom
 
   - name: example-dns-query
     url: "8.8.8.8" # Address of the DNS server to use
@@ -39,15 +57,21 @@ endpoints:
     conditions:
       - "[BODY] == pat(*.*.*.*)"  # Matches any IPv4 address
       - "[DNS_RCODE] == NOERROR"
+    alerts:
+      - type: wecom
 
   - name: icmp-ping
     url: "icmp://example.org"
     interval: 1m
     conditions:
       - "[CONNECTED] == true"
+    alerts:
+      - type: wecom
 
   - name: check-domain-expiration
     url: "https://example.org/"
     interval: 1h
     conditions:
       - "[DOMAIN_EXPIRATION] > 720h"
+    alerts:
+      - type: wecom

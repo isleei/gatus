@@ -41,6 +41,8 @@ const (
 
 	cacheTTL = 10 * time.Minute
 
+	allEndpointStatusesCachePrefix = "__all_statuses__"
+
 	adminAuditRetention       = 90 * 24 * time.Hour
 	adminAuditCleanupInterval = 24 * time.Hour
 )
@@ -122,27 +124,34 @@ func (s *Store) createSchema() error {
 // GetAllEndpointStatuses returns all monitored endpoint.Status
 // with a subset of endpoint.Result defined by the page and pageSize parameters
 func (s *Store) GetAllEndpointStatuses(params *paging.EndpointStatusParams) ([]*endpoint.Status, error) {
+	// Check top-level cache first
+	if s.writeThroughCache != nil {
+		cacheKey := fmt.Sprintf("%s%d-%d-%d-%d", allEndpointStatusesCachePrefix, params.EventsPage, params.EventsPageSize, params.ResultsPage, params.ResultsPageSize)
+		if cached, exists := s.writeThroughCache.Get(cacheKey); exists {
+			if statuses, ok := cached.([]*endpoint.Status); ok {
+				return statuses, nil
+			}
+		}
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
 	}
-	keys, err := s.getAllEndpointKeys(tx)
+	endpointStatuses, err := s.getAllEndpointStatusesBatch(tx, params)
 	if err != nil {
 		_ = tx.Rollback()
 		return nil, err
 	}
-	endpointStatuses := make([]*endpoint.Status, 0, len(keys))
-	for _, key := range keys {
-		endpointStatus, err := s.getEndpointStatusByKey(tx, key, params)
-		if err != nil {
-			continue
-		}
-		endpointStatuses = append(endpointStatuses, endpointStatus)
-	}
 	if err = tx.Commit(); err != nil {
 		_ = tx.Rollback()
+		return nil, err
 	}
-	return endpointStatuses, err
+	// Store in top-level cache
+	if s.writeThroughCache != nil {
+		cacheKey := fmt.Sprintf("%s%d-%d-%d-%d", allEndpointStatusesCachePrefix, params.EventsPage, params.EventsPageSize, params.ResultsPage, params.ResultsPageSize)
+		s.writeThroughCache.SetWithTTL(cacheKey, endpointStatuses, cacheTTL)
+	}
+	return endpointStatuses, nil
 }
 
 // GetEndpointStatus returns the endpoint status for a given endpoint name in the given group
@@ -369,6 +378,8 @@ func (s *Store) InsertEndpointResult(ep *endpoint.Endpoint, result *endpoint.Res
 		}
 	}
 	if s.writeThroughCache != nil {
+		// Invalidate top-level all-statuses cache
+		_ = s.writeThroughCache.DeleteKeysByPattern(allEndpointStatusesCachePrefix + "*")
 		cacheKeysToRefresh := s.writeThroughCache.GetKeysByPattern(ep.Key()+"*", 0)
 		for _, cacheKey := range cacheKeysToRefresh {
 			s.writeThroughCache.Delete(cacheKey)
@@ -901,6 +912,225 @@ func (s *Store) getAllEndpointKeys(tx *sql.Tx) (keys []string, err error) {
 	return
 }
 
+// getAllEndpointStatusesBatch retrieves all endpoint statuses using batch queries instead of N+1 queries.
+// It executes 3 queries total: (1) all endpoint info, (2) all results with ROW_NUMBER(), (3) all conditions.
+func (s *Store) getAllEndpointStatusesBatch(tx *sql.Tx, params *paging.EndpointStatusParams) ([]*endpoint.Status, error) {
+	// Query 1: Get all endpoint IDs, keys, names, groups that have non-suite results
+	rows, err := tx.Query(`
+		SELECT DISTINCT e.endpoint_id, e.endpoint_key, e.endpoint_name, e.endpoint_group
+		FROM endpoints e
+		INNER JOIN endpoint_results er ON e.endpoint_id = er.endpoint_id
+		WHERE er.suite_result_id IS NULL
+		ORDER BY e.endpoint_key
+	`)
+	if err != nil {
+		return nil, err
+	}
+	type epInfo struct {
+		id    int64
+		key   string
+		name  string
+		group string
+	}
+	var eps []epInfo
+	for rows.Next() {
+		var info epInfo
+		if err := rows.Scan(&info.id, &info.key, &info.name, &info.group); err != nil {
+			return nil, err
+		}
+		eps = append(eps, info)
+	}
+	rows.Close()
+	if len(eps) == 0 {
+		return []*endpoint.Status{}, nil
+	}
+	// Build Status objects and index by endpoint_id
+	statuses := make([]*endpoint.Status, 0, len(eps))
+	statusByEpID := make(map[int64]*endpoint.Status, len(eps))
+	for i := range eps {
+		st := endpoint.NewStatus(eps[i].group, eps[i].name)
+		statuses = append(statuses, st)
+		statusByEpID[eps[i].id] = st
+	}
+	// Query 2: Batch-fetch results using ROW_NUMBER() window function
+	if params.ResultsPageSize > 0 {
+		offset := (params.ResultsPage - 1) * params.ResultsPageSize
+		limit := offset + params.ResultsPageSize
+		// Build IN clause placeholders and args
+		args := make([]interface{}, 0, len(eps)+2)
+		var inClause strings.Builder
+		for i, ep := range eps {
+			if i > 0 {
+				inClause.WriteByte(',')
+			}
+			inClause.WriteString("$")
+			inClause.WriteString(strconv.Itoa(i + 1))
+			args = append(args, ep.id)
+		}
+		args = append(args, offset) // rn lower bound (exclusive)
+		args = append(args, limit)  // rn upper bound (inclusive)
+		query := fmt.Sprintf(`
+			SELECT endpoint_id, endpoint_result_id, success, errors, connected, status,
+			       dns_rcode, certificate_expiration, domain_expiration,
+			       body_size_bytes, body_size_baseline_bytes, body_size_drift_percent,
+			       hostname, ip, duration, timestamp
+			FROM (
+				SELECT er.endpoint_id, er.endpoint_result_id, er.success, er.errors, er.connected, er.status,
+				       er.dns_rcode, er.certificate_expiration, er.domain_expiration,
+				       er.body_size_bytes, er.body_size_baseline_bytes, er.body_size_drift_percent,
+				       er.hostname, er.ip, er.duration, er.timestamp,
+				       ROW_NUMBER() OVER (
+				           PARTITION BY er.endpoint_id ORDER BY er.endpoint_result_id DESC
+				       ) as rn
+				FROM endpoint_results er
+				WHERE er.endpoint_id IN (%s) AND er.suite_result_id IS NULL
+			) sub
+			WHERE rn > $%d AND rn <= $%d
+		`, inClause.String(), len(eps)+1, len(eps)+2)
+		rows, err = tx.Query(query, args...)
+		if err != nil {
+			return nil, err
+		}
+		// Map result_id -> Result for condition attachment
+		idResultMap := make(map[int64]*endpoint.Result)
+		// Collect results per endpoint (they arrive in arbitrary order due to partitioning)
+		resultsByEpID := make(map[int64][]*endpoint.Result)
+		for rows.Next() {
+			result := &endpoint.Result{}
+			var epID, resultID int64
+			var joinedErrors string
+			var bodySizeBytes, bodySizeBaselineBytes sql.NullInt64
+			var bodySizeDriftPercent sql.NullFloat64
+			err = rows.Scan(
+				&epID, &resultID,
+				&result.Success, &joinedErrors, &result.Connected, &result.HTTPStatus,
+				&result.DNSRCode, &result.CertificateExpiration, &result.DomainExpiration,
+				&bodySizeBytes, &bodySizeBaselineBytes, &bodySizeDriftPercent,
+				&result.Hostname, &result.IP, &result.Duration, &result.Timestamp,
+			)
+			if err != nil {
+				logr.Errorf("[sql.getAllEndpointStatusesBatch] Silently failed to scan result: %s", err.Error())
+				err = nil
+				continue
+			}
+			if bodySizeBytes.Valid {
+				v := bodySizeBytes.Int64
+				result.BodySizeBytes = &v
+			}
+			if bodySizeBaselineBytes.Valid {
+				v := bodySizeBaselineBytes.Int64
+				result.BodySizeBaselineBytes = &v
+			}
+			if bodySizeDriftPercent.Valid {
+				v := bodySizeDriftPercent.Float64
+				result.BodySizeDriftPercent = &v
+			}
+			if len(joinedErrors) != 0 {
+				result.Errors = strings.Split(joinedErrors, arraySeparator)
+			}
+			// Populate JSON-facing seconds fields from the stored duration values
+			if result.CertificateExpiration != 0 {
+				v := int64(result.CertificateExpiration.Seconds())
+				result.CertificateExpirationSeconds = &v
+			}
+			idResultMap[resultID] = result
+			// Prepend to maintain chronological order (results come ORDER BY result_id DESC)
+			resultsByEpID[epID] = append([]*endpoint.Result{result}, resultsByEpID[epID]...)
+		}
+		rows.Close()
+		// Assign results to statuses
+		for epID, results := range resultsByEpID {
+			if st, ok := statusByEpID[epID]; ok {
+				st.Results = results
+			}
+		}
+		// Query 3: Batch-fetch conditions for all result IDs
+		if len(idResultMap) > 0 {
+			condArgs := make([]interface{}, 0, len(idResultMap))
+			var condIn strings.Builder
+			idx := 0
+			for resultID := range idResultMap {
+				if idx > 0 {
+					condIn.WriteByte(',')
+				}
+				condIn.WriteString("$")
+				condIn.WriteString(strconv.Itoa(idx + 1))
+				condArgs = append(condArgs, resultID)
+				idx++
+			}
+			condQuery := fmt.Sprintf(`
+				SELECT endpoint_result_id, condition, success
+				FROM endpoint_result_conditions
+				WHERE endpoint_result_id IN (%s)
+			`, condIn.String())
+			condRows, err := tx.Query(condQuery, condArgs...)
+			if err != nil {
+				return nil, err
+			}
+			for condRows.Next() {
+				cr := &endpoint.ConditionResult{}
+				var resultID int64
+				if err = condRows.Scan(&resultID, &cr.Condition, &cr.Success); err != nil {
+					condRows.Close()
+					return nil, err
+				}
+				idResultMap[resultID].ConditionResults = append(idResultMap[resultID].ConditionResults, cr)
+			}
+			condRows.Close()
+		}
+	}
+	// Events: batch-fetch if requested (rarely used in GetAllEndpointStatuses path)
+	// Errors are silently ignored to match original per-key behavior
+	if params.EventsPageSize > 0 {
+		args := make([]interface{}, 0, len(eps)+1)
+		var inClause strings.Builder
+		for i, ep := range eps {
+			if i > 0 {
+				inClause.WriteByte(',')
+			}
+			inClause.WriteString("$")
+			inClause.WriteString(strconv.Itoa(i + 1))
+			args = append(args, ep.id)
+		}
+		args = append(args, params.EventsPageSize)
+		query := fmt.Sprintf(`
+			SELECT endpoint_id, event_type, event_timestamp
+			FROM (
+				SELECT ee.endpoint_id, ee.event_type, ee.event_timestamp, ee.endpoint_event_id,
+				       ROW_NUMBER() OVER (
+				           PARTITION BY ee.endpoint_id ORDER BY ee.endpoint_event_id DESC
+				       ) as rn
+				FROM endpoint_events ee
+				WHERE ee.endpoint_id IN (%s)
+			) sub
+			WHERE rn <= $%d
+			ORDER BY endpoint_event_id ASC
+		`, inClause.String(), len(eps)+1)
+		rows, err = tx.Query(query, args...)
+		if err != nil {
+			logr.Errorf("[sql.getAllEndpointStatusesBatch] Failed to retrieve events: %s", err.Error())
+		} else {
+			eventsByEpID := make(map[int64][]*endpoint.Event)
+			for rows.Next() {
+				var epID int64
+				event := &endpoint.Event{}
+				if err := rows.Scan(&epID, &event.Type, &event.Timestamp); err != nil {
+					logr.Errorf("[sql.getAllEndpointStatusesBatch] Failed to scan event: %s", err.Error())
+					break
+				}
+				eventsByEpID[epID] = append(eventsByEpID[epID], event)
+			}
+			rows.Close()
+			for epID, events := range eventsByEpID {
+				if st, ok := statusByEpID[epID]; ok {
+					st.Events = events
+				}
+			}
+		}
+	}
+	return statuses, nil
+}
+
 func (s *Store) getEndpointStatusByKey(tx *sql.Tx, key string, parameters *paging.EndpointStatusParams) (*endpoint.Status, error) {
 	var cacheKey string
 	if s.writeThroughCache != nil {
@@ -1040,6 +1270,11 @@ func (s *Store) getEndpointResultsByEndpointID(tx *sql.Tx, endpointID int64, pag
 		}
 		if len(joinedErrors) != 0 {
 			result.Errors = strings.Split(joinedErrors, arraySeparator)
+		}
+		// Populate JSON-facing seconds fields from the stored duration values
+		if result.CertificateExpiration != 0 {
+			v := int64(result.CertificateExpiration.Seconds())
+			result.CertificateExpirationSeconds = &v
 		}
 		// This is faster than using a subselect
 		results = append([]*endpoint.Result{result}, results...)
@@ -1385,6 +1620,23 @@ func extractKeyAndParamsFromCacheKey(cacheKey string) (string, *paging.EndpointS
 
 // GetAllSuiteStatuses returns all monitored suite statuses
 func (s *Store) GetAllSuiteStatuses(params *paging.SuiteStatusParams) ([]*suite.Status, error) {
+	if s.writeThroughCache != nil {
+		page, pageSize := 1, 20
+		if params != nil {
+			if params.Page > 0 {
+				page = params.Page
+			}
+			if params.PageSize > 0 {
+				pageSize = params.PageSize
+			}
+		}
+		cacheKey := fmt.Sprintf("suite_statuses:%d:%d", page, pageSize)
+		if cached, exists := s.writeThroughCache.Get(cacheKey); exists {
+			if casted, ok := cached.([]*suite.Status); ok {
+				return casted, nil
+			}
+		}
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
@@ -1445,11 +1697,41 @@ func (s *Store) GetAllSuiteStatuses(params *paging.SuiteStatusParams) ([]*suite.
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
+	if s.writeThroughCache != nil {
+		page, pageSize := 1, 20
+		if params != nil {
+			if params.Page > 0 {
+				page = params.Page
+			}
+			if params.PageSize > 0 {
+				pageSize = params.PageSize
+			}
+		}
+		cacheKey := fmt.Sprintf("suite_statuses:%d:%d", page, pageSize)
+		s.writeThroughCache.SetWithTTL(cacheKey, suiteStatuses, cacheTTL)
+	}
 	return suiteStatuses, nil
 }
 
 // GetSuiteStatusByKey returns the suite status for a given key
 func (s *Store) GetSuiteStatusByKey(key string, params *paging.SuiteStatusParams) (*suite.Status, error) {
+	if s.writeThroughCache != nil {
+		page, pageSize := 1, 20
+		if params != nil {
+			if params.Page > 0 {
+				page = params.Page
+			}
+			if params.PageSize > 0 {
+				pageSize = params.PageSize
+			}
+		}
+		cacheKey := fmt.Sprintf("suite_status:%s:%d:%d", key, page, pageSize)
+		if cached, exists := s.writeThroughCache.Get(cacheKey); exists {
+			if casted, ok := cached.(*suite.Status); ok {
+				return casted, nil
+			}
+		}
+	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return nil, err
@@ -1501,6 +1783,19 @@ func (s *Store) GetSuiteStatusByKey(key string, params *paging.SuiteStatusParams
 
 	if err = tx.Commit(); err != nil {
 		return nil, err
+	}
+	if s.writeThroughCache != nil {
+		page, pageSize := 1, 20
+		if params != nil {
+			if params.Page > 0 {
+				page = params.Page
+			}
+			if params.PageSize > 0 {
+				pageSize = params.PageSize
+			}
+		}
+		cacheKey := fmt.Sprintf("suite_status:%s:%d:%d", key, page, pageSize)
+		s.writeThroughCache.SetWithTTL(cacheKey, status, cacheTTL)
 	}
 	return status, nil
 }
@@ -1584,6 +1879,10 @@ func (s *Store) InsertSuiteResult(su *suite.Suite, result *suite.Result) error {
 	if err = tx.Commit(); err != nil {
 		return err
 	}
+	if s.writeThroughCache != nil {
+		_ = s.writeThroughCache.DeleteKeysByPattern("suite_statuses:*")
+		_ = s.writeThroughCache.DeleteKeysByPattern("suite_status:" + su.Key() + ":*")
+	}
 	return nil
 }
 
@@ -1597,6 +1896,10 @@ func (s *Store) DeleteAllSuiteStatusesNotInKeys(keys []string) int {
 		if err != nil {
 			logr.Errorf("[sql.DeleteAllSuiteStatusesNotInKeys] Failed to delete all suites: %s", err.Error())
 			return 0
+		}
+		if s.writeThroughCache != nil {
+			_ = s.writeThroughCache.DeleteKeysByPattern("suite_statuses:*")
+			_ = s.writeThroughCache.DeleteKeysByPattern("suite_status:*")
 		}
 		rowsAffected, _ := result.RowsAffected()
 		return int(rowsAffected)
@@ -1638,6 +1941,10 @@ func (s *Store) DeleteAllSuiteStatusesNotInKeys(keys []string) int {
 	if err != nil {
 		logr.Errorf("[sql.DeleteAllSuiteStatusesNotInKeys] Failed to delete suites: %s", err.Error())
 		return 0
+	}
+	if s.writeThroughCache != nil {
+		_ = s.writeThroughCache.DeleteKeysByPattern("suite_statuses:*")
+		_ = s.writeThroughCache.DeleteKeysByPattern("suite_status:*")
 	}
 	rowsAffected, _ := result.RowsAffected()
 	return int(rowsAffected)
@@ -1724,97 +2031,87 @@ func (s *Store) getSuiteResults(tx *sql.Tx, suiteID int64, page, pageSize int) (
 		opp := len(resultsData) - 1 - i
 		resultsData[i], resultsData[opp] = resultsData[opp], resultsData[i]
 	}
-	// Fetch endpoint results for each suite result
-	for _, data := range resultsData {
-		result := data.result
-		resultID := data.id
-		// Query endpoint results for this suite result
-		epRows, err := tx.Query(`
-			SELECT
-				er.endpoint_result_id,
-				e.endpoint_name,
-				er.success,
-				er.errors,
-				er.duration,
-				er.timestamp
+	// Batch fetch all endpoint results for all suite results in one query
+	if len(resultsData) > 0 {
+		// Build suite_result_id IN (...) clause
+		suiteResultIDs := make([]interface{}, len(resultsData))
+		suiteResultPlaceholders := make([]string, len(resultsData))
+		// Map suite_result_id -> index in resultsData for fast lookup
+		suiteResultIndexMap := make(map[int64]int, len(resultsData))
+		for i, data := range resultsData {
+			suiteResultIDs[i] = data.id
+			suiteResultPlaceholders[i] = "$" + strconv.Itoa(i+1)
+			suiteResultIndexMap[data.id] = i
+		}
+		epQuery := `SELECT er.endpoint_result_id, er.suite_result_id, e.endpoint_name, er.success, er.errors, er.duration, er.timestamp
 			FROM endpoint_results er
 			JOIN endpoints e ON er.endpoint_id = e.endpoint_id
-			WHERE er.suite_result_id = $1
-			ORDER BY er.endpoint_result_id
-		`, resultID)
+			WHERE er.suite_result_id IN (` + strings.Join(suiteResultPlaceholders, ",") + `)
+			ORDER BY er.endpoint_result_id`
+		epRows, err := tx.Query(epQuery, suiteResultIDs...)
 		if err != nil {
-			logr.Errorf("[sql.getSuiteResults] Failed to get endpoint results for suite_result_id=%d: %s", resultID, err.Error())
-			continue
-		}
-		// Map to store endpoint results by their ID for condition lookup
-		epResultMap := make(map[int64]*endpoint.Result)
-		epCount := 0
-		for epRows.Next() {
-			epCount++
-			var epResultID int64
-			var name string
-			var success bool
-			var joinedErrors string
-			var duration int64
-			var timestamp time.Time
-			err = epRows.Scan(&epResultID, &name, &success, &joinedErrors, &duration, &timestamp)
-			if err != nil {
-				logr.Errorf("[sql.getSuiteResults] Failed to scan endpoint result: %s", err.Error())
-				continue
-			}
-			epResult := &endpoint.Result{
-				Name:             name,
-				Success:          success,
-				Duration:         time.Duration(duration),
-				Timestamp:        timestamp,
-				ConditionResults: []*endpoint.ConditionResult{}, // Initialize empty slice
-			}
-			if len(joinedErrors) > 0 {
-				epResult.Errors = strings.Split(joinedErrors, arraySeparator)
-			}
-			epResultMap[epResultID] = epResult
-			result.EndpointResults = append(result.EndpointResults, epResult)
-		}
-		epRows.Close()
-		// Fetch condition results for all endpoint results in this suite result
-		if len(epResultMap) > 0 {
-			args := make([]interface{}, 0, len(epResultMap))
-			condQuery := `SELECT endpoint_result_id, condition, success
-						  FROM endpoint_result_conditions
-						  WHERE endpoint_result_id IN (`
-			index := 1
-			for epResultID := range epResultMap {
-				condQuery += "$" + strconv.Itoa(index) + ","
-				args = append(args, epResultID)
-				index++
-			}
-			condQuery = condQuery[:len(condQuery)-1] + ")"
-
-			condRows, err := tx.Query(condQuery, args...)
-			if err != nil {
-				logr.Errorf("[sql.getSuiteResults] Failed to get condition results for suite_result_id=%d: %s", resultID, err.Error())
-			} else {
-				condCount := 0
-				for condRows.Next() {
-					condCount++
-					conditionResult := &endpoint.ConditionResult{}
-					var epResultID int64
-					if err = condRows.Scan(&epResultID, &conditionResult.Condition, &conditionResult.Success); err != nil {
-						logr.Errorf("[sql.getSuiteResults] Failed to scan condition result: %s", err.Error())
-						continue
-					}
-					if epResult, exists := epResultMap[epResultID]; exists {
-						epResult.ConditionResults = append(epResult.ConditionResults, conditionResult)
-					}
+			logr.Errorf("[sql.getSuiteResults] Failed to batch get endpoint results: %s", err.Error())
+		} else {
+			// Global map: endpoint_result_id -> *endpoint.Result for condition lookup
+			allEpResultMap := make(map[int64]*endpoint.Result)
+			for epRows.Next() {
+				var epResultID, suiteResultID int64
+				var name string
+				var success bool
+				var joinedErrors string
+				var duration int64
+				var timestamp time.Time
+				if err = epRows.Scan(&epResultID, &suiteResultID, &name, &success, &joinedErrors, &duration, &timestamp); err != nil {
+					logr.Errorf("[sql.getSuiteResults] Failed to scan endpoint result: %s", err.Error())
+					continue
 				}
-				condRows.Close()
-				if condCount > 0 {
-					logr.Debugf("[sql.getSuiteResults] Found %d condition results for suite_result_id=%d", condCount, resultID)
+				epResult := &endpoint.Result{
+					Name:             name,
+					Success:          success,
+					Duration:         time.Duration(duration),
+					Timestamp:        timestamp,
+					ConditionResults: []*endpoint.ConditionResult{},
+				}
+				if len(joinedErrors) > 0 {
+					epResult.Errors = strings.Split(joinedErrors, arraySeparator)
+				}
+				allEpResultMap[epResultID] = epResult
+				if idx, ok := suiteResultIndexMap[suiteResultID]; ok {
+					resultsData[idx].result.EndpointResults = append(resultsData[idx].result.EndpointResults, epResult)
 				}
 			}
-		}
-		if epCount > 0 {
-			logr.Debugf("[sql.getSuiteResults] Found %d endpoint results for suite_result_id=%d", epCount, resultID)
+			epRows.Close()
+			// Batch fetch all conditions for all endpoint results in one query
+			if len(allEpResultMap) > 0 {
+				condArgs := make([]interface{}, 0, len(allEpResultMap))
+				condPlaceholders := make([]string, 0, len(allEpResultMap))
+				idx := 1
+				for epResultID := range allEpResultMap {
+					condPlaceholders = append(condPlaceholders, "$"+strconv.Itoa(idx))
+					condArgs = append(condArgs, epResultID)
+					idx++
+				}
+				condQuery := `SELECT endpoint_result_id, condition, success
+					FROM endpoint_result_conditions
+					WHERE endpoint_result_id IN (` + strings.Join(condPlaceholders, ",") + `)`
+				condRows, err := tx.Query(condQuery, condArgs...)
+				if err != nil {
+					logr.Errorf("[sql.getSuiteResults] Failed to batch get condition results: %s", err.Error())
+				} else {
+					for condRows.Next() {
+						conditionResult := &endpoint.ConditionResult{}
+						var epResultID int64
+						if err = condRows.Scan(&epResultID, &conditionResult.Condition, &conditionResult.Success); err != nil {
+							logr.Errorf("[sql.getSuiteResults] Failed to scan condition result: %s", err.Error())
+							continue
+						}
+						if epResult, exists := allEpResultMap[epResultID]; exists {
+							epResult.ConditionResults = append(epResult.ConditionResults, conditionResult)
+						}
+					}
+					condRows.Close()
+				}
+			}
 		}
 	}
 	// Extract just the results for return

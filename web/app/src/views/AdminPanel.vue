@@ -40,6 +40,7 @@
     <div class="flex flex-wrap gap-2">
       <Button :variant="activeTab === 'monitors' ? 'default' : 'outline'" size="sm" @click="activeTab = 'monitors'">{{ t('adminV2.tabMonitors') }}</Button>
       <Button :variant="activeTab === 'audit' ? 'default' : 'outline'" size="sm" @click="activeTab = 'audit'">{{ t('adminV2.tabAudit') }}</Button>
+      <Button :variant="activeTab === 'notifications' ? 'default' : 'outline'" size="sm" @click="activeTab = 'notifications'; loadNotifications()">{{ t('adminV2.tabNotifications') }}</Button>
       <Button :variant="activeTab === 'advanced' ? 'default' : 'outline'" size="sm" @click="activeTab = 'advanced'">{{ t('adminV2.tabAdvanced') }}</Button>
     </div>
 
@@ -214,6 +215,65 @@
         <Button size="sm" variant="outline" :disabled="auditFilters.page <= 1" @click="auditFilters.page--; refreshAuditLogs()">{{ t('pagination.previous') }}</Button>
         <span>{{ t('pagination.pageOf', { current: auditFilters.page, total: auditTotalPages }) }}</span>
         <Button size="sm" variant="outline" :disabled="auditFilters.page >= auditTotalPages" @click="auditFilters.page++; refreshAuditLogs()">{{ t('pagination.next') }}</Button>
+      </div>
+    </template>
+
+    <template v-if="activeTab === 'notifications'">
+      <div class="grid gap-4 lg:grid-cols-[280px_1fr]">
+        <Card>
+          <CardContent class="p-0">
+            <div v-if="loadingNotifications" class="p-4 text-sm text-muted-foreground">{{ t('admin.loadingNotifications') }}</div>
+            <div v-else-if="notificationProviders.length === 0" class="p-4 text-sm text-muted-foreground">{{ t('admin.noNotificationProvider') }}</div>
+            <div v-else>
+              <div
+                v-for="provider in notificationProviders"
+                :key="provider.type"
+                class="flex items-center justify-between gap-2 border-b px-3 py-2 cursor-pointer hover:bg-muted/50 text-sm"
+                :class="{ 'bg-muted': selectedNotificationType === provider.type }"
+                @click="selectNotificationType(provider)"
+              >
+                <div>
+                  <p class="font-medium">{{ provider.type }}</p>
+                  <p class="text-xs text-muted-foreground">
+                    {{ provider.configured ? t('admin.configured') : t('admin.notConfigured') }}
+                  </p>
+                </div>
+                <span v-if="provider.configured" class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-800">
+                  {{ t('admin.configured') }}
+                </span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent class="p-4 space-y-3">
+            <div v-if="!selectedNotificationType" class="text-sm text-muted-foreground">
+              {{ t('admin.selectNotificationType') }}
+            </div>
+            <template v-else>
+              <div class="flex items-center justify-between gap-2">
+                <h3 class="text-lg font-semibold">{{ selectedNotificationType }}</h3>
+                <span v-if="selectedProviderUsage" class="text-xs text-muted-foreground">
+                  {{ t('admin.usedBy', { endpoints: selectedProviderUsage.endpoints, externalEndpoints: selectedProviderUsage.externalEndpoints }) }}
+                </span>
+              </div>
+              <div>
+                <label class="text-sm font-medium">{{ t('admin.providerConfigJson') }}</label>
+                <textarea
+                  v-model="notificationConfigJson"
+                  class="w-full min-h-[320px] rounded-md border bg-background p-3 font-mono text-xs"
+                  spellcheck="false"
+                />
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <Button size="sm" @click="saveNotification" :disabled="savingNotification">{{ t('admin.saveNotification') }}</Button>
+                <Button size="sm" variant="destructive" @click="deleteNotification" :disabled="savingNotification">{{ t('admin.deleteNotification') }}</Button>
+              </div>
+              <p v-if="notificationMessage" class="text-sm text-muted-foreground">{{ notificationMessage }}</p>
+            </template>
+          </CardContent>
+        </Card>
       </div>
     </template>
 
@@ -627,6 +687,14 @@ const importExport = ref({
 })
 const importPreview = ref('')
 const importExportMessage = ref('')
+
+const notificationProviders = ref([])
+const loadingNotifications = ref(false)
+const selectedNotificationType = ref('')
+const selectedProviderUsage = ref(null)
+const notificationConfigJson = ref('')
+const savingNotification = ref(false)
+const notificationMessage = ref('')
 
 const monitorTotalPages = computed(() => Math.max(1, Math.ceil(monitorTotal.value / Number(filters.value.pageSize || 50))))
 const auditTotalPages = computed(() => Math.max(1, Math.ceil(auditTotal.value / auditFilters.value.pageSize)))
@@ -1371,6 +1439,100 @@ const resetOverlay = async () => {
     managedMessage.value = error.message
   } finally {
     savingManaged.value = false
+  }
+}
+
+const loadNotifications = async () => {
+  loadingNotifications.value = true
+  notificationMessage.value = ''
+  try {
+    const response = await fetch('/api/v1/admin/notifications', { credentials: 'include' })
+    const data = await response.json()
+    if (!response.ok) {
+      throw new Error(data.error || t('admin.failedLoadNotifications'))
+    }
+    const pinnedTypes = ['wecom']
+    const all = Array.isArray(data.notifications) ? data.notifications : []
+    notificationProviders.value = all.filter((n) => pinnedTypes.includes(n.type) || n.configured)
+  } catch (error) {
+    notificationMessage.value = error.message
+  } finally {
+    loadingNotifications.value = false
+  }
+}
+
+const selectNotificationType = (provider) => {
+  selectedNotificationType.value = provider.type
+  selectedProviderUsage.value = { endpoints: provider.usedByEndpoints || 0, externalEndpoints: provider.usedByExternalEndpoints || 0 }
+  notificationConfigJson.value = provider.config ? JSON.stringify(provider.config, null, 2) : '{}'
+  notificationMessage.value = ''
+}
+
+const saveNotification = async () => {
+  if (!selectedNotificationType.value) {
+    notificationMessage.value = t('admin.selectNotificationFirst')
+    return
+  }
+  let parsed
+  try {
+    parsed = JSON.parse(notificationConfigJson.value)
+  } catch {
+    notificationMessage.value = t('admin.notificationConfigJsonObject')
+    return
+  }
+  if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+    notificationMessage.value = t('admin.notificationConfigJsonObject')
+    return
+  }
+  savingNotification.value = true
+  notificationMessage.value = ''
+  try {
+    const response = await fetch(`/api/v1/admin/notifications/${encodeURIComponent(selectedNotificationType.value)}`, {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(parsed),
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(data.error || t('admin.failedSaveNotification'))
+    }
+    notificationMessage.value = t('admin.notificationSaved')
+    await loadNotifications()
+  } catch (error) {
+    notificationMessage.value = error.message
+  } finally {
+    savingNotification.value = false
+  }
+}
+
+const deleteNotification = async () => {
+  if (!selectedNotificationType.value) return
+  if (!window.confirm(t('admin.confirmDeleteNotification', { type: selectedNotificationType.value }))) return
+  savingNotification.value = true
+  notificationMessage.value = ''
+  try {
+    const response = await fetch(`/api/v1/admin/notifications/${encodeURIComponent(selectedNotificationType.value)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+    })
+    if (response.status === 409) {
+      const data = await response.json().catch(() => ({}))
+      throw new Error(data.error || t('admin.failedDeleteNotification'))
+    }
+    if (!response.ok && response.status !== 204) {
+      const data = await response.json().catch(() => ({}))
+      throw new Error(data.error || t('admin.failedDeleteNotification'))
+    }
+    notificationMessage.value = t('admin.notificationDeleted')
+    selectedNotificationType.value = ''
+    notificationConfigJson.value = ''
+    selectedProviderUsage.value = null
+    await loadNotifications()
+  } catch (error) {
+    notificationMessage.value = error.message
+  } finally {
+    savingNotification.value = false
   }
 }
 
