@@ -2,6 +2,9 @@ package store
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/TwiN/gatus/v5/alerting/alert"
@@ -137,8 +140,10 @@ func Initialize(cfg *storage.Config) error {
 	}
 	if cfg == nil {
 		// This only happens in tests
-		logr.Warn("[store.Initialize] nil storage config passed as parameter. This should only happen in tests. Defaulting to an empty config.")
+		logr.Warn("[store.Initialize] nil storage config passed as parameter. This should only happen in tests. Defaulting to SQLite in-memory.")
 		cfg = &storage.Config{
+			Type:                  storage.TypeSQLite,
+			Path:                  filepath.Join(os.TempDir(), fmt.Sprintf("gatus-test-%d.db", time.Now().UnixNano())),
 			MaximumNumberOfResults: storage.DefaultMaximumNumberOfResults,
 			MaximumNumberOfEvents:  storage.DefaultMaximumNumberOfEvents,
 		}

@@ -760,6 +760,7 @@ func (s *Store) maybeCleanupAdminAuditLogs() {
 // Clear deletes everything from the store
 func (s *Store) Clear() {
 	_, _ = s.db.Exec("DELETE FROM endpoints")
+	_, _ = s.db.Exec("DELETE FROM suites")
 	_, _ = s.db.Exec("DELETE FROM admin_audit_logs")
 	if s.writeThroughCache != nil {
 		_ = s.writeThroughCache.DeleteKeysByPattern("*")
