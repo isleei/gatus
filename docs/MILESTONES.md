@@ -55,7 +55,7 @@
 | # | 事项 | 验收标准 |
 |---|---|---|
 | 2.1 | GitHub `workflow` 权限 | `gh auth` 具备 `workflow` scope；补入此前因权限跳过的上游 `.github/workflows` 变更 |
-| 2.2 | 合上游节奏 | 建议每季度一次；冲突高发区：Admin、`App.vue`、`go.mod`、`storage/store/sql/`、前端 `web/static` |
+| 2.2 | 合上游节奏 | 建议每季度一次；冲突高发区：Admin、`App.vue`、`go.mod`、`storage/store/sql/`、前端 `web/static`；操作手册 → [`UPSTREAM-MERGE.md`](./UPSTREAM-MERGE.md) |
 | 2.3 | 测试修复 | 修复 API JSON 断言失败（时间戳 / `omitempty` / null vs `[]`）；ICMP 测试文档标明需 sudo |
 | 2.4 | Overlay 策略 | 生产 overlay 私有化或本地挂载；公开仓不存真实客户域名与 webhook |
 
@@ -94,6 +94,7 @@
 - 分组鉴权 / groups API
 - 端点防篡改（body-size drift / 关键词）
 - 中文 i18n 与 `README_zh.md` / 部署文档
+- Suite 级告警（`suites[].alerts`）
 
 ---
 
@@ -137,7 +138,7 @@
 | # | 状态 | 备注 |
 |---|---|---|
 | 2.1 GitHub `workflow` 权限 | 待运维 | 见 [`OPS-RUNBOOK.md`](./OPS-RUNBOOK.md) §4.4：`gh auth refresh -s workflow` 后补入跳过的上游 workflows；**不阻塞其余仓内修复** |
-| 2.2 合上游节奏 | 进行中 | 建议每季度；冲突高发区见上表 |
+| 2.2 合上游节奏 | 进行中 | 建议每季度；手册 [`UPSTREAM-MERGE.md`](./UPSTREAM-MERGE.md)；冲突高发区见上表 |
 | 2.3 测试修复 | 已完成（仓内） | API `TestEndpointStatuses` / `TestSuiteStatuses`（时间戳先置零 + suite SQL 补 status/hostname + `results` 空数组）；ICMP `TestPing` 非 root 时 `t.Skip` |
 | 2.4 Overlay 策略 | 已完成（与 0.3） | 公开仓仅 example；生产 overlay 本地/私有挂载 |
 
