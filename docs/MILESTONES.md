@@ -151,7 +151,7 @@
 | # | 状态 | 备注 |
 |---|---|---|
 | 3.1 Admin 增强 | 已完成（仓内） | JSON/YAML 导入；WeCom/custom 表单校验与帮助文案；证书页可配置即将过期阈值（默认 72h，对齐 `[CERTIFICATE_EXPIRATION]`） |
-| 3.2 Suite 级告警 | 已完成（仓内） | `suites[].alerts` + watchdog 触发/恢复；复用 wecom/slack/custom 等 provider；含单测；**重启/热重载后 suites[].alerts Triggered 状态恢复**（`initializeStorage` + `main_test.go`） |
+| 3.2 Suite 级告警 | 已完成（仓内） | `suites[].alerts` + watchdog 触发/恢复；复用 wecom/slack/custom 等 provider；含单测；**重启/热重载后 suites[].alerts Triggered 状态恢复**（`initializeStorage` + `main_test.go`）；Admin 通知删除前计 suite/step 引用（`usedBySuites`，409） |
 | 3.3 状态页 | 已完成（仓内） | 文档 `ui.default-sort-by: group`；公开看板 vs `/admin` / `/api/v1/admin/*` 分离说明 |
 | 3.4 可观测性 | 已完成（仓内） | `metrics: true` + [`docs/examples/prometheus/`](./examples/prometheus/) |
 

@@ -137,3 +137,96 @@ func loadManagedNotificationsTestConfig(t *testing.T, withSlackAlertReference bo
 	}
 	return cfg
 }
+
+
+func TestManagedNotificationDeleteConflictWhenUsedBySuite(t *testing.T) {
+	cfg := loadManagedNotificationsTestConfig(t, false)
+	router := New(cfg).Router()
+
+	wecomPayload := `{
+  "webhook-url": "https://example.org/wecom-hook",
+  "title": "Suite Alerts"
+}`
+	putCode, putBody := runManagedNotificationRequest(t, router, http.MethodPut, "/api/v1/admin/notifications/wecom", wecomPayload)
+	if putCode != http.StatusOK {
+		t.Fatalf("expected PUT code %d, got %d (%s)", http.StatusOK, putCode, putBody)
+	}
+
+	suitePayload := `{
+  "name": "checkout",
+  "group": "core",
+  "interval": "10m",
+  "timeout": "5m",
+  "alerts": [{"type": "wecom"}],
+  "endpoints": [
+    {
+      "name": "login",
+      "url": "https://example.org/login",
+      "conditions": ["[STATUS] == 200"],
+      "alerts": [{"type": "wecom"}]
+    }
+  ]
+}`
+	suiteCreateCode, suiteCreateBody := runManagedNotificationRequest(t, router, http.MethodPost, "/api/v1/admin/suites", suitePayload)
+	if suiteCreateCode != http.StatusOK && suiteCreateCode != http.StatusCreated {
+		t.Fatalf("expected suite create success, got %d (%s)", suiteCreateCode, suiteCreateBody)
+	}
+
+	getCode, getBody := runManagedNotificationRequest(t, router, http.MethodGet, "/api/v1/admin/notifications", "")
+	if getCode != http.StatusOK {
+		t.Fatalf("expected GET code %d, got %d (%s)", http.StatusOK, getCode, getBody)
+	}
+	if !strings.Contains(getBody, `"type":"wecom"`) || !strings.Contains(getBody, `"usedBySuites":2`) {
+		t.Fatalf("expected GET list to expose usedBySuites=2 for wecom, got: %s", getBody)
+	}
+
+	deleteCode, deleteBody := runManagedNotificationRequest(t, router, http.MethodDelete, "/api/v1/admin/notifications/wecom", "")
+	if deleteCode != http.StatusConflict {
+		t.Fatalf("expected DELETE code %d, got %d (%s)", http.StatusConflict, deleteCode, deleteBody)
+	}
+	if !strings.Contains(deleteBody, "suite alert") {
+		t.Fatalf("expected conflict reason about suite references, got: %s", deleteBody)
+	}
+
+	suiteDeleteCode, suiteDeleteBody := runManagedNotificationRequest(t, router, http.MethodDelete, "/api/v1/admin/suites/core_checkout", "")
+	if suiteDeleteCode != http.StatusNoContent {
+		t.Fatalf("expected suite DELETE code %d, got %d (%s)", http.StatusNoContent, suiteDeleteCode, suiteDeleteBody)
+	}
+
+	deleteCode, deleteBody = runManagedNotificationRequest(t, router, http.MethodDelete, "/api/v1/admin/notifications/wecom", "")
+	if deleteCode != http.StatusNoContent {
+		t.Fatalf("expected DELETE code %d after clearing suite refs, got %d (%s)", http.StatusNoContent, deleteCode, deleteBody)
+	}
+}
+
+func TestManagedNotificationSuiteUsageWithoutStepAlerts(t *testing.T) {
+	cfg := loadManagedNotificationsTestConfig(t, false)
+	router := New(cfg).Router()
+
+	suitePayload := `{
+  "name": "checkout",
+  "group": "core",
+  "interval": "10m",
+  "timeout": "5m",
+  "alerts": [{"type": "wecom"}],
+  "endpoints": [
+    {
+      "name": "login",
+      "url": "https://example.org/login",
+      "conditions": ["[STATUS] == 200"]
+    }
+  ]
+}`
+	suiteCreateCode, suiteCreateBody := runManagedNotificationRequest(t, router, http.MethodPost, "/api/v1/admin/suites", suitePayload)
+	if suiteCreateCode != http.StatusOK && suiteCreateCode != http.StatusCreated {
+		t.Fatalf("expected suite create success, got %d (%s)", suiteCreateCode, suiteCreateBody)
+	}
+
+	getCode, getBody := runManagedNotificationRequest(t, router, http.MethodGet, "/api/v1/admin/notifications", "")
+	if getCode != http.StatusOK {
+		t.Fatalf("expected GET code %d, got %d (%s)", http.StatusOK, getCode, getBody)
+	}
+	if !strings.Contains(getBody, `"type":"wecom"`) || !strings.Contains(getBody, `"usedBySuites":1`) {
+		t.Fatalf("expected usedBySuites=1 for suite-level wecom alert, got: %s", getBody)
+	}
+}

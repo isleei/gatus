@@ -1,6 +1,6 @@
 # Self-review Stages 3-4
 
-Branch: fix/suite-alert-persistence-reload (suite alert reload follow-up)
+Branch: fix/admin-notification-suite-refs (admin notification suite usage)
 Repo: isleei/gatus
 Date: 2026-09-10 (Asia/Shanghai)
 
@@ -8,6 +8,7 @@ Date: 2026-09-10 (Asia/Shanghai)
 
 - 3.2 Suite alerts: suites[].alerts; watchdog HandleSuiteAlerting; Admin suite alerts; tests in watchdog/suite_alerting_test.go
 - Suite alert persistence reload: `initializeStorage` restores `suites[].alerts` Triggered/counters after restart/hot-reload; preserves synthetic suite keys; orphan checksum cleanup; tests in `main_test.go`
+- Admin notification refcount includes suite-level + suite-step alerts (`usedBySuites`); DELETE returns 409 while referenced
 - 4.2 Audit retention: storage.admin-audit-max-age; daily cleanup; DELETE /api/v1/admin/audit-logs
 - 3.1 Import YAML + WeCom/custom validation/help; CertificateMonitor 72h threshold
 

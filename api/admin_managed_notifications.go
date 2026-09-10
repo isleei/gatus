@@ -20,6 +20,7 @@ type ManagedNotification struct {
 	Configured              bool           `json:"configured"`
 	UsedByEndpoints         int            `json:"usedByEndpoints"`
 	UsedByExternalEndpoints int            `json:"usedByExternalEndpoints"`
+	UsedBySuites            int            `json:"usedBySuites"`
 	Config                  map[string]any `json:"config,omitempty"`
 }
 
@@ -123,12 +124,13 @@ func PutManagedNotification(cfg *config.Config) fiber.Handler {
 				"error": err.Error(),
 			})
 		}
-		usedByEndpoints, usedByExternalEndpoints := countAlertTypeReferences(candidate, alert.Type(notificationType))
+		usedByEndpoints, usedByExternalEndpoints, usedBySuites := countAlertTypeReferences(candidate, alert.Type(notificationType))
 		response := ManagedNotification{
 			Type:                    notificationType,
 			Configured:              true,
 			UsedByEndpoints:         usedByEndpoints,
 			UsedByExternalEndpoints: usedByExternalEndpoints,
+			UsedBySuites:            usedBySuites,
 			Config:                  serializedConfig,
 		}
 		clearAdminDerivedCache()
@@ -156,9 +158,9 @@ func DeleteManagedNotification(cfg *config.Config) fiber.Handler {
 		}
 		beforeNotifications, _ := buildManagedNotificationList(candidate)
 		before := findManagedNotificationByType(beforeNotifications, notificationType)
-		usedByEndpoints, usedByExternalEndpoints := countAlertTypeReferences(candidate, alert.Type(notificationType))
-		if usedByEndpoints > 0 || usedByExternalEndpoints > 0 {
-			err := fmt.Errorf("notification type %s is still referenced by %d endpoint(s) and %d external endpoint(s)", notificationType, usedByEndpoints, usedByExternalEndpoints)
+		usedByEndpoints, usedByExternalEndpoints, usedBySuites := countAlertTypeReferences(candidate, alert.Type(notificationType))
+		if usedByEndpoints > 0 || usedByExternalEndpoints > 0 || usedBySuites > 0 {
+			err := fmt.Errorf("notification type %s is still referenced by %d endpoint(s), %d external endpoint(s), and %d suite alert(s)", notificationType, usedByEndpoints, usedByExternalEndpoints, usedBySuites)
 			writeAdminAudit(c, cfg, "delete", "notification", notificationType, before, nil, err)
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 				"error": err.Error(),
@@ -214,11 +216,12 @@ func buildManagedNotificationList(candidate *config.Config) ([]ManagedNotificati
 		if len(fieldTag) == 0 || fieldTag == "-" {
 			continue
 		}
-		usedByEndpoints, usedByExternalEndpoints := countAlertTypeReferences(candidate, alert.Type(fieldTag))
+		usedByEndpoints, usedByExternalEndpoints, usedBySuites := countAlertTypeReferences(candidate, alert.Type(fieldTag))
 		notification := ManagedNotification{
 			Type:                    fieldTag,
 			UsedByEndpoints:         usedByEndpoints,
 			UsedByExternalEndpoints: usedByExternalEndpoints,
+			UsedBySuites:            usedBySuites,
 		}
 		if candidate.Alerting != nil {
 			providerFieldValue := alertingValue.Field(i)
@@ -280,7 +283,7 @@ func isManagedAlertingConfigEmpty(alertingConfig *alerting.Config) bool {
 	return true
 }
 
-func countAlertTypeReferences(candidate *config.Config, notificationType alert.Type) (usedByEndpoints, usedByExternalEndpoints int) {
+func countAlertTypeReferences(candidate *config.Config, notificationType alert.Type) (usedByEndpoints, usedByExternalEndpoints, usedBySuites int) {
 	for _, monitoredEndpoint := range candidate.Endpoints {
 		for _, endpointAlert := range monitoredEndpoint.Alerts {
 			if endpointAlert.Type == notificationType {
@@ -295,7 +298,21 @@ func countAlertTypeReferences(candidate *config.Config, notificationType alert.T
 			}
 		}
 	}
-	return usedByEndpoints, usedByExternalEndpoints
+	for _, monitoredSuite := range candidate.Suites {
+		for _, suiteAlert := range monitoredSuite.Alerts {
+			if suiteAlert.Type == notificationType {
+				usedBySuites++
+			}
+		}
+		for _, suiteEndpoint := range monitoredSuite.Endpoints {
+			for _, endpointAlert := range suiteEndpoint.Alerts {
+				if endpointAlert.Type == notificationType {
+					usedBySuites++
+				}
+			}
+		}
+	}
+	return usedByEndpoints, usedByExternalEndpoints, usedBySuites
 }
 
 func findManagedNotificationByType(notifications []ManagedNotification, targetType string) *ManagedNotification {
