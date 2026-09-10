@@ -2050,7 +2050,7 @@ func (s *Store) getSuiteResults(tx *sql.Tx, suiteID int64, page, pageSize int) (
 			suiteResultPlaceholders[i] = "$" + strconv.Itoa(i+1)
 			suiteResultIndexMap[data.id] = i
 		}
-		epQuery := `SELECT er.endpoint_result_id, er.suite_result_id, e.endpoint_name, er.success, er.errors, er.duration, er.timestamp
+		epQuery := `SELECT er.endpoint_result_id, er.suite_result_id, e.endpoint_name, er.success, er.errors, er.status, er.hostname, er.duration, er.timestamp
 			FROM endpoint_results er
 			JOIN endpoints e ON er.endpoint_id = e.endpoint_id
 			WHERE er.suite_result_id IN (` + strings.Join(suiteResultPlaceholders, ",") + `)
@@ -2066,14 +2066,18 @@ func (s *Store) getSuiteResults(tx *sql.Tx, suiteID int64, page, pageSize int) (
 				var name string
 				var success bool
 				var joinedErrors string
+				var httpStatus int
+				var hostname string
 				var duration int64
 				var timestamp time.Time
-				if err = epRows.Scan(&epResultID, &suiteResultID, &name, &success, &joinedErrors, &duration, &timestamp); err != nil {
+				if err = epRows.Scan(&epResultID, &suiteResultID, &name, &success, &joinedErrors, &httpStatus, &hostname, &duration, &timestamp); err != nil {
 					logr.Errorf("[sql.getSuiteResults] Failed to scan endpoint result: %s", err.Error())
 					continue
 				}
 				epResult := &endpoint.Result{
 					Name:             name,
+					HTTPStatus:       httpStatus,
+					Hostname:         hostname,
 					Success:          success,
 					Duration:         time.Duration(duration),
 					Timestamp:        timestamp,
@@ -2121,8 +2125,8 @@ func (s *Store) getSuiteResults(tx *sql.Tx, suiteID int64, page, pageSize int) (
 			}
 		}
 	}
-	// Extract just the results for return
-	var results []*suite.Result
+	// Extract just the results for return (empty slice, never nil — JSON should be [] not null)
+	results := make([]*suite.Result, 0, len(resultsData))
 	for _, data := range resultsData {
 		results = append(results, data.result)
 	}

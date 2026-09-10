@@ -109,9 +109,9 @@
 
 | 阶段 | 状态 | 备注 |
 |---|---|---|
-| 0 安全与基线 | 进行中 | 见下方 0.x 拆分 |
-| 1 防自盲 | 未开始 | |
-| 2 可维护性 | 未开始 | workflow scope 待补 |
+| 0 安全与基线 | 进行中 | 0.1/0.3/0.4 已完成；**0.2 仍待运维轮换凭据** |
+| 1 防自盲 | 进行中（仓内已完成） | 哨兵示例 + 备份演练文档已入库；**真实部署哨兵 / 跑备份演练仍属运维** |
+| 2 可维护性 | 进行中 | API/ICMP 测试修复已入库；**2.1 workflow scope 仍需运维 `gh auth refresh -s workflow`** |
 | 3 产品完善 | 未开始 | |
 | 4 可选增强 | 未开始 | |
 
@@ -119,10 +119,27 @@
 
 | # | 状态 | 备注 |
 |---|---|---|
-| 0.1 合并上游 PR [#4](https://github.com/isleei/gatus/pull/4) | 已完成 | 已合入 `master`（含里程碑文档 PR [#5](https://github.com/isleei/gatus/pull/5)） |
-| 0.2 轮换泄露凭据 | 进行中 / 待运维轮换 | **无法在 git 完成**：运维须在线上轮换 Postgres 密码、Basic Auth、企业微信 webhook，并作废旧 webhook |
-| 0.3 密钥移出公开仓 | 已完成（本 PR） | `config.yaml` / overlay / 文档示例已占位；生产 overlay 已移出跟踪并加入 `.gitignore`；**git 历史仍含旧密钥，必须配合 0.2 轮换** |
-| 0.4 使用自建镜像 | 文档已更新 | `docs/DEPLOYMENT.md` 强调 `docker build -t gatus:local .`，禁止本 fork 生产依赖 `ghcr.io/twin/gatus` / `twinproduction/gatus` |
+| 0.1 合并上游 PR [#4](https://github.com/isleei/gatus/pull/4) | 已完成 | 已合入 `master`（含里程碑文档 PR [#5](https://github.com/isleei/gatus/pull/5)、密钥清理 PR [#6](https://github.com/isleei/gatus/pull/6)） |
+| 0.2 轮换泄露凭据 | 待运维 | **无法在 git 完成**：运维须在线上轮换 Postgres 密码、Basic Auth、企业微信 webhook，并作废旧 webhook |
+| 0.3 密钥移出公开仓 | 已完成 | `config.yaml` / overlay / 文档示例已占位；生产 overlay 已移出跟踪并加入 `.gitignore`；**git 历史仍含旧密钥，必须配合 0.2 轮换** |
+| 0.4 使用自建镜像 | 已完成（文档） | `docs/DEPLOYMENT.md` 强调 `docker build -t gatus:local .`，禁止本 fork 生产依赖 `ghcr.io/twin/gatus` / `twinproduction/gatus` |
+
+### 阶段 1 细项
+
+| # | 状态 | 备注 |
+|---|---|---|
+| 1.1 第二节点（哨兵） | 仓内已完成 / 部署待运维 | 示例：[`docs/examples/sentinel/`](./examples/sentinel/)（compose + config + 中文 README） |
+| 1.2 哨兵监控范围 | 仓内已完成 | 主 `/health` + 2 个业务 URL 占位；WeCom；1m 间隔 |
+| 1.3 Postgres 备份 | 仓内已完成 / 演练待运维 | `docs/DEPLOYMENT.md` 含 pg_dump / pg_restore 提纲与检查清单（无真实凭据） |
+
+### 阶段 2 细项
+
+| # | 状态 | 备注 |
+|---|---|---|
+| 2.1 GitHub `workflow` 权限 | 待运维 | 需操作者执行 `gh auth refresh -s workflow` 后补入此前跳过的上游 `.github/workflows`；**不阻塞本阶段其余仓内修复** |
+| 2.2 合上游节奏 | 进行中 | 建议每季度；冲突高发区见上表 |
+| 2.3 测试修复 | 已完成（仓内） | API `TestEndpointStatuses` / `TestSuiteStatuses`（时间戳先置零 + suite SQL 补 status/hostname + `results` 空数组）；ICMP `TestPing` 非 root 时 `t.Skip` |
+| 2.4 Overlay 策略 | 已完成（与 0.3） | 公开仓仅 example；生产 overlay 本地/私有挂载 |
 
 更新本表时请同步改「状态 / 备注」，并在相关 PR 描述中引用本文件对应章节。
 
