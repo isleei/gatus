@@ -255,7 +255,7 @@
               <div class="flex items-center justify-between gap-2">
                 <h3 class="text-lg font-semibold">{{ selectedNotificationType }}</h3>
                 <span v-if="selectedProviderUsage" class="text-xs text-muted-foreground">
-                  {{ t('admin.usedBy', { endpoints: selectedProviderUsage.endpoints, externalEndpoints: selectedProviderUsage.externalEndpoints }) }}
+                  {{ t('admin.usedBy', { endpoints: selectedProviderUsage.endpoints, externalEndpoints: selectedProviderUsage.externalEndpoints, suites: selectedProviderUsage.suites }) }}
                 </span>
               </div>
               <div>
@@ -1496,7 +1496,7 @@ const loadNotifications = async () => {
 
 const selectNotificationType = (provider) => {
   selectedNotificationType.value = provider.type
-  selectedProviderUsage.value = { endpoints: provider.usedByEndpoints || 0, externalEndpoints: provider.usedByExternalEndpoints || 0 }
+  selectedProviderUsage.value = { endpoints: provider.usedByEndpoints || 0, externalEndpoints: provider.usedByExternalEndpoints || 0, suites: provider.usedBySuites || 0 }
   notificationConfigJson.value = provider.config ? JSON.stringify(provider.config, null, 2) : '{}'
   notificationMessage.value = ''
 }
