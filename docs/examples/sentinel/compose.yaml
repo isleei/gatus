@@ -1,11 +1,11 @@
 # Sentinel compose — build from THIS fork (Admin/WeCom live here; do not use twin/gatus).
 #
 # From this directory:
-#   export GATUS_PRIMARY_URL=https://status.example.com
-#   export GATUS_WECOM_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=REPLACE
-#   export GATUS_SENTINEL_CRITICAL_URL_1=https://app.example.com/health
-#   export GATUS_SENTINEL_CRITICAL_URL_2=https://api.example.com/health
+#   cp .env.example .env   # then edit placeholders (recommended)
 #   docker compose up -d --build
+#
+# Or export GATUS_* vars in the shell (.env optional — required: false below).
+# Unset / empty URL env vars → Gatus crashes on start (ErrEndpointWithNoURL) — fail-fast by design.
 #
 # Or pre-build at repo root: docker build -t gatus:local .  then set image: gatus:local
 
@@ -18,6 +18,9 @@ services:
     restart: unless-stopped
     ports:
       - "8081:8080"
+    env_file:
+      - path: .env
+        required: false
     volumes:
       - ./config.yaml:/config/config.yaml:ro
     environment:

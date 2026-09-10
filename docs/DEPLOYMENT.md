@@ -777,7 +777,7 @@ pg_restore --clean --if-exists --no-owner   -h "$PGHOST" -U "$PGUSER" -d gatus_r
 
 ## 运维手册（人工清单）
 
-仓内 Stages 0–4（PR #4–#8）已交付文档与示例后，仍须人工完成的操作（凭据轮换、哨兵真实部署、Postgres 恢复演练、反代加固等）统一收敛在：
+仓内 Stages 0–4（PR #4–#9；#10/#11 为套件告警持久化与 Admin 通知计数跟进）已交付文档与示例后，仍须人工完成的操作（凭据轮换、哨兵真实部署、Postgres 恢复演练、反代加固等）统一收敛在：
 
 **[`docs/OPS-RUNBOOK.md`](./OPS-RUNBOOK.md)**
 

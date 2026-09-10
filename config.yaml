@@ -8,6 +8,8 @@ storage:
   # path: "postgres://${GATUS_DB_USER}:${GATUS_DB_PASSWORD}@${GATUS_DB_HOST}:5432/gatus?sslmode=disable"
   path: "$GATUS_DB_URL"
   caching: true
+  # Optional: auto-prune admin audit logs older than this duration (0 / omit = keep forever until manual DELETE)
+  # admin-audit-max-age: 720h
 
 security:
   basic:
