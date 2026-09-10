@@ -125,8 +125,9 @@ func initializeStorage(cfg *config.Config) {
 	for _, ee := range cfg.ExternalEndpoints {
 		keys = append(keys, ee.Key())
 	}
-	// Also add endpoints that are part of suites
+	// Also add suite keys (synthetic endpoints used by suites[].alerts) and suite step endpoints
 	for _, suite := range cfg.Suites {
+		keys = append(keys, suite.Key())
 		for _, ep := range suite.Endpoints {
 			keys = append(keys, ep.Key())
 		}
@@ -211,6 +212,33 @@ func initializeStorage(cfg *config.Config) {
 					ep.NumberOfSuccessesInARow, ep.NumberOfFailuresInARow = numberOfSuccessesInARow, alert.FailureThreshold
 					numberOfPersistedTriggeredAlertsLoaded++
 				}
+			}
+		}
+	}
+	// Load persisted triggered alerts for suite-level alerts (suites[].alerts).
+	// HandleSuiteAlerting persists under suite.ToEndpointForAlerting().Key() (== suite.Key()).
+	for _, s := range cfg.Suites {
+		alertingEndpoint := s.ToEndpointForAlerting()
+		var checksums []string
+		for _, a := range s.Alerts {
+			if a.IsEnabled() {
+				checksums = append(checksums, a.Checksum())
+			}
+		}
+		numberOfTriggeredAlertsDeleted := store.Get().DeleteAllTriggeredAlertsNotInChecksumsByEndpoint(alertingEndpoint, checksums)
+		if numberOfTriggeredAlertsDeleted > 0 {
+			logr.Debugf("[main.initializeStorage] Deleted %d triggered alerts for suite with key=%s because their configurations have been changed or deleted", numberOfTriggeredAlertsDeleted, s.Key())
+		}
+		for _, a := range s.Alerts {
+			exists, resolveKey, numberOfSuccessesInARow, err := store.Get().GetTriggeredEndpointAlert(alertingEndpoint, a)
+			if err != nil {
+				logr.Errorf("[main.initializeStorage] Failed to get triggered alert for suite with key=%s: %s", s.Key(), err.Error())
+				continue
+			}
+			if exists {
+				a.Triggered, a.ResolveKey = true, resolveKey
+				s.NumberOfSuccessesInARow, s.NumberOfFailuresInARow = numberOfSuccessesInARow, a.FailureThreshold
+				numberOfPersistedTriggeredAlertsLoaded++
 			}
 		}
 	}

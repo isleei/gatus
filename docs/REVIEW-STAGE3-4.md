@@ -1,12 +1,13 @@
 # Self-review Stages 3-4
 
-Branch: feat/stage3-4-product-and-optional
+Branch: fix/suite-alert-persistence-reload (suite alert reload follow-up)
 Repo: isleei/gatus
 Date: 2026-09-10 (Asia/Shanghai)
 
 ## Fully implemented
 
 - 3.2 Suite alerts: suites[].alerts; watchdog HandleSuiteAlerting; Admin suite alerts; tests in watchdog/suite_alerting_test.go
+- Suite alert persistence reload: `initializeStorage` restores `suites[].alerts` Triggered/counters after restart/hot-reload; preserves synthetic suite keys; orphan checksum cleanup; tests in `main_test.go`
 - 4.2 Audit retention: storage.admin-audit-max-age; daily cleanup; DELETE /api/v1/admin/audit-logs
 - 3.1 Import YAML + WeCom/custom validation/help; CertificateMonitor 72h threshold
 
@@ -20,7 +21,6 @@ Date: 2026-09-10 (Asia/Shanghai)
 ## Deferred
 
 - Multi-step notification wizard
-- Suite alert persistence reload on restart
 - Prod secret rotation / deploy / IdP setup
 
 ## Remaining human ops
