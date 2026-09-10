@@ -163,6 +163,9 @@ func Initialize(cfg *storage.Config) error {
 	default:
 		store, _ = memory.NewStore(cfg.MaximumNumberOfResults, cfg.MaximumNumberOfEvents)
 	}
+	if cfg.AdminAuditMaxAge > 0 {
+		go adminAuditCleanup(ctx, store, cfg.AdminAuditMaxAge)
+	}
 	return nil
 }
 
@@ -180,6 +183,34 @@ func autoSave(ctx context.Context, store Store, interval time.Duration) {
 			if err := store.Save(); err != nil {
 				logr.Errorf("[store.autoSave] Save failed: %s", err.Error())
 			}
+		}
+	}
+}
+
+// adminAuditCleanup periodically deletes admin audit logs older than maxAge.
+func adminAuditCleanup(ctx context.Context, store Store, maxAge time.Duration) {
+	const interval = 24 * time.Hour
+	run := func() {
+		before := time.Now().Add(-maxAge)
+		deleted, err := store.DeleteAdminAuditLogsOlderThan(before)
+		if err != nil {
+			logr.Errorf("[store.adminAuditCleanup] Failed to delete old admin audit logs: %s", err.Error())
+			return
+		}
+		if deleted > 0 {
+			logr.Infof("[store.adminAuditCleanup] Deleted %d admin audit log(s) older than %s", deleted, maxAge)
+		}
+	}
+	run()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			logr.Info("[store.adminAuditCleanup] Stopping")
+			return
+		case <-ticker.C:
+			run()
 		}
 	}
 }

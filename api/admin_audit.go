@@ -1,9 +1,11 @@
 package api
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
+	"github.com/TwiN/gatus/v5/config"
 	"github.com/TwiN/gatus/v5/storage/store"
 	"github.com/TwiN/gatus/v5/storage/store/common"
 	"github.com/gofiber/fiber/v2"
@@ -61,5 +63,43 @@ func normalizeAdminAuditResultFilter(value string) string {
 		return strings.ToLower(strings.TrimSpace(value))
 	default:
 		return ""
+	}
+}
+
+// DeleteAdminAuditLogsOlderThan deletes admin audit logs older than the given max age (query: maxAge, e.g. 720h).
+// Also accepts "days" as an integer alternative (e.g. days=30).
+func DeleteAdminAuditLogsOlderThan(cfg *config.Config) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		var maxAge time.Duration
+		var err error
+		if raw := strings.TrimSpace(c.Query("maxAge")); len(raw) > 0 {
+			maxAge, err = time.ParseDuration(raw)
+			if err != nil {
+				writeAdminAudit(c, cfg, "cleanup", "audit-log", "", fiber.Map{"maxAge": raw}, nil, err)
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid maxAge duration: " + err.Error()})
+			}
+		} else if days := c.QueryInt("days", 0); days > 0 {
+			maxAge = time.Duration(days) * 24 * time.Hour
+		} else if cfg != nil && cfg.Storage != nil && cfg.Storage.AdminAuditMaxAge > 0 {
+			maxAge = cfg.Storage.AdminAuditMaxAge
+		} else {
+			err = fmt.Errorf("maxAge or days query parameter required (or configure storage.admin-audit-max-age)")
+			writeAdminAudit(c, cfg, "cleanup", "audit-log", "", nil, nil, err)
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
+		if maxAge <= 0 {
+			err = fmt.Errorf("maxAge must be positive")
+			writeAdminAudit(c, cfg, "cleanup", "audit-log", "", fiber.Map{"maxAge": maxAge.String()}, nil, err)
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
+		}
+		before := time.Now().Add(-maxAge)
+		deleted, err := store.Get().DeleteAdminAuditLogsOlderThan(before)
+		if err != nil {
+			writeAdminAudit(c, cfg, "cleanup", "audit-log", "", fiber.Map{"before": before}, nil, err)
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
+		}
+		result := fiber.Map{"deleted": deleted, "before": before.Format(time.RFC3339), "maxAge": maxAge.String()}
+		writeAdminAudit(c, cfg, "cleanup", "audit-log", "", fiber.Map{"maxAge": maxAge.String()}, result, nil)
+		return c.Status(fiber.StatusOK).JSON(result)
 	}
 }

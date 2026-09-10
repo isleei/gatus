@@ -1,3 +1,6 @@
+ui:
+  default-sort-by: group
+
 metrics: true
 endpoints:
   - name: website

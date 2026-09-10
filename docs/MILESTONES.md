@@ -112,8 +112,8 @@
 | 0 安全与基线 | 进行中 | 0.1/0.3/0.4 已完成；**0.2 仍待运维轮换凭据** |
 | 1 防自盲 | 进行中（仓内已完成） | 哨兵示例 + 备份演练文档已入库；**真实部署哨兵 / 跑备份演练仍属运维** |
 | 2 可维护性 | 进行中 | API/ICMP 测试修复已入库；**2.1 workflow scope 仍需运维 `gh auth refresh -s workflow`** |
-| 3 产品完善 | 未开始 | |
-| 4 可选增强 | 未开始 | |
+| 3 产品完善 | 仓内已完成 | 见细项；运维网络策略/真实 WeCom 仍属人工 |
+| 4 可选增强 | 仓内已完成 | 多地域示例 + 审计保留 + OIDC 文档；部署/IdP 属运维 |
 
 ### 阶段 0 细项
 
@@ -144,6 +144,26 @@
 更新本表时请同步改「状态 / 备注」，并在相关 PR 描述中引用本文件对应章节。
 
 ---
+
+
+### 阶段 3 细项
+
+| # | 状态 | 备注 |
+|---|---|---|
+| 3.1 Admin 增强 | 已完成（仓内） | JSON/YAML 导入；WeCom/custom 表单校验与帮助文案；证书页可配置即将过期阈值（默认 72h，对齐 `[CERTIFICATE_EXPIRATION]`） |
+| 3.2 Suite 级告警 | 已完成（仓内） | `suites[].alerts` + watchdog 触发/恢复；复用 wecom/slack/custom 等 provider；含单测 |
+| 3.3 状态页 | 已完成（仓内） | 文档 `ui.default-sort-by: group`；公开看板 vs `/admin` / `/api/v1/admin/*` 分离说明 |
+| 3.4 可观测性 | 已完成（仓内） | `metrics: true` + [`docs/examples/prometheus/`](./examples/prometheus/) |
+
+### 阶段 4 细项
+
+| # | 状态 | 备注 |
+|---|---|---|
+| 4.1 多地域探测 | 仓内已完成 / 部署待运维 | [`docs/examples/multi-region/`](./examples/multi-region/)（primary `external-endpoints` + curl 卫星推送 + 中文 README） |
+| 4.2 审计保留 | 已完成（仓内） | `storage.admin-audit-max-age` + 日清理 ticker；`DELETE /api/v1/admin/audit-logs?days=` |
+| 4.3 OIDC | 已完成（文档） | `docs/DEPLOYMENT.md` 中文 OIDC 专节（占位符）；IdP 注册与密钥轮换待运维 |
+
+自审：[`docs/REVIEW-STAGE3-4.md`](./REVIEW-STAGE3-4.md)
 
 ## 相关链接
 

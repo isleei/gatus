@@ -122,7 +122,7 @@ func applyManagedOverlay(cfg *Config) error {
 	if len(cfg.Endpoints) == 0 && len(cfg.Suites) == 0 {
 		return ErrNoEndpointOrSuiteInConfig
 	}
-	ValidateAlertingConfig(cfg.Alerting, cfg.Endpoints, cfg.ExternalEndpoints)
+	ValidateAlertingConfig(cfg.Alerting, cfg.Endpoints, cfg.ExternalEndpoints, cfg.Suites)
 	if err := ValidateEndpointsConfig(cfg); err != nil {
 		return err
 	}

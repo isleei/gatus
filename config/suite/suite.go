@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/TwiN/gatus/v5/alerting/alert"
 	"github.com/TwiN/gatus/v5/config/endpoint"
 	endpointui "github.com/TwiN/gatus/v5/config/endpoint/ui"
 	"github.com/TwiN/gatus/v5/config/gontext"
@@ -58,6 +59,19 @@ type Suite struct {
 
 	// Endpoints in the suite (executed sequentially)
 	Endpoints []*endpoint.Endpoint `yaml:"endpoints"`
+
+	// Alerts is the suite-level alerting configuration (triggered on suite failure/success).
+	// Reuses the same alert types as endpoints (wecom, slack, custom, etc.).
+	Alerts []*alert.Alert `yaml:"alerts,omitempty"`
+
+	// NumberOfFailuresInARow is the number of unsuccessful suite evaluations in a row (runtime).
+	NumberOfFailuresInARow int `yaml:"-"`
+
+	// NumberOfSuccessesInARow is the number of successful suite evaluations in a row (runtime).
+	NumberOfSuccessesInARow int `yaml:"-"`
+
+	// LastReminderSent is the time at which the last reminder was sent for this suite (runtime).
+	LastReminderSent time.Time `yaml:"-"`
 }
 
 // IsEnabled returns whether the suite is enabled
@@ -123,6 +137,12 @@ func (s *Suite) ValidateAndSetDefaults() error {
 	// Initialize context if nil
 	if s.InitialContext == nil {
 		s.InitialContext = make(map[string]interface{})
+	}
+	// Validate suite-level alerts
+	for _, suiteAlert := range s.Alerts {
+		if err := suiteAlert.ValidateAndSetDefaults(); err != nil {
+			return fmt.Errorf("invalid suite alert: %w", err)
+		}
 	}
 	return nil
 }
@@ -238,4 +258,26 @@ func extractValueForStorage(placeholder string, result *endpoint.Result) (interf
 		return boolVal, nil
 	}
 	return resolved, nil
+}
+
+// ToEndpointForAlerting builds a synthetic endpoint used by alert providers for suite-level alerts.
+// Alert pointers are shared so Triggered state is preserved on the suite alerts.
+func (s *Suite) ToEndpointForAlerting() *endpoint.Endpoint {
+	return &endpoint.Endpoint{
+		Name:                     s.Name,
+		Group:                    s.Group,
+		URL:                      "suite://" + s.Key(),
+		Alerts:                   s.Alerts,
+		NumberOfFailuresInARow:   s.NumberOfFailuresInARow,
+		NumberOfSuccessesInARow:  s.NumberOfSuccessesInARow,
+		LastReminderSent:         s.LastReminderSent,
+	}
+}
+
+// DisplayName returns group/name or name for suite identification in alerts/UI.
+func (s *Suite) DisplayName() string {
+	if len(s.Group) > 0 {
+		return s.Group + "/" + s.Name
+	}
+	return s.Name
 }

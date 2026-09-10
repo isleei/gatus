@@ -1,0 +1,54 @@
+# Primary Gatus: aggregates satellite pushes via external-endpoints.
+# Secrets via env only — do not commit real tokens/webhooks.
+
+storage:
+  type: sqlite
+  path: /data/gatus.db
+
+metrics: true
+
+ui:
+  title: "Gatus Multi-Region"
+  default-sort-by: group
+
+security:
+  basic:
+    username: "$GATUS_ADMIN_USER"
+    password-bcrypt-base64: "$GATUS_ADMIN_PASSWORD_BCRYPT_BASE64"
+
+alerting:
+  wecom:
+    webhook-url: "$GATUS_WECOM_WEBHOOK_URL"
+    default-alert:
+      failure-threshold: 2
+      success-threshold: 2
+      send-on-resolved: true
+
+# Local checks on the primary (optional)
+endpoints:
+  - name: primary-self
+    group: primary
+    url: "http://127.0.0.1:8080/health"
+    interval: 1m
+    conditions:
+      - "[STATUS] == 200"
+    alerts:
+      - type: wecom
+
+# Satellites push results here with Bearer token
+external-endpoints:
+  - name: website
+    group: region-eu
+    token: "$GATUS_EXTERNAL_TOKEN_EU"
+    heartbeat:
+      interval: 5m
+    alerts:
+      - type: wecom
+
+  - name: website
+    group: region-us
+    token: "$GATUS_EXTERNAL_TOKEN_US"
+    heartbeat:
+      interval: 5m
+    alerts:
+      - type: wecom

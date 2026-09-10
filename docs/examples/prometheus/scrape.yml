@@ -1,0 +1,14 @@
+# Example Prometheus scrape snippet for Gatus
+# Enable in Gatus config: metrics: true
+# Metrics path: /metrics
+
+scrape_configs:
+  - job_name: gatus
+    metrics_path: /metrics
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - gatus:8080
+        labels:
+          service: gatus
+          env: production

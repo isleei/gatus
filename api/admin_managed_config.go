@@ -13,10 +13,10 @@ import (
 )
 
 type ManagedConfigPayload struct {
-	Alerting          *alerting.Config             `json:"alerting,omitempty"`
-	Endpoints         []*endpoint.Endpoint         `json:"endpoints"`
-	ExternalEndpoints []*endpoint.ExternalEndpoint `json:"externalEndpoints"`
-	Suites            []*suite.Suite               `json:"suites"`
+	Alerting          *alerting.Config             `json:"alerting,omitempty" yaml:"alerting,omitempty"`
+	Endpoints         []*endpoint.Endpoint         `json:"endpoints" yaml:"endpoints"`
+	ExternalEndpoints []*endpoint.ExternalEndpoint `json:"externalEndpoints" yaml:"external-endpoints"`
+	Suites            []*suite.Suite               `json:"suites" yaml:"suites"`
 }
 
 type ManagedConfigResponse struct {
@@ -76,7 +76,7 @@ func validateManagedPayload(candidate *config.Config) error {
 	if len(candidate.Endpoints) == 0 && len(candidate.Suites) == 0 {
 		return config.ErrNoEndpointOrSuiteInConfig
 	}
-	config.ValidateAlertingConfig(candidate.Alerting, candidate.Endpoints, candidate.ExternalEndpoints)
+	config.ValidateAlertingConfig(candidate.Alerting, candidate.Endpoints, candidate.ExternalEndpoints, candidate.Suites)
 	if err := config.ValidateSecurityConfig(candidate); err != nil {
 		return err
 	}

@@ -39,12 +39,29 @@
       </div>
 
       <Card>
-        <CardContent class="p-4">
+        <CardContent class="p-4 space-y-3">
           <Input
             v-model="searchQuery"
             type="text"
             :placeholder="t('certificates.searchPlaceholder')"
           />
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <label class="text-sm text-muted-foreground" for="cert-threshold">
+              {{ t('certificates.expiringSoonThreshold') }}
+            </label>
+            <div class="flex items-center gap-2">
+              <Input
+                id="cert-threshold"
+                v-model.number="expiringSoonHours"
+                type="number"
+                min="1"
+                class="w-28"
+                @change="persistThreshold"
+              />
+              <span class="text-sm text-muted-foreground">{{ t('certificates.hours') }}</span>
+            </div>
+          </div>
+          <p class="text-xs text-muted-foreground">{{ t('certificates.conditionHint', { hours: expiringSoonHours }) }}</p>
         </CardContent>
       </Card>
 
@@ -114,7 +131,8 @@ import StatusBadge from '@/components/StatusBadge.vue'
 import { useI18n, getCurrentLocale } from '@/i18n'
 import { formatDurationFromSeconds } from '@/utils/time'
 
-const CERT_EXPIRING_SOON_SECONDS = 7 * 24 * 3600
+const CERT_THRESHOLD_STORAGE_KEY = 'gatus:cert-expiring-soon-hours'
+const DEFAULT_CERT_EXPIRING_SOON_HOURS = 72
 
 const router = useRouter()
 const { t } = useI18n()
@@ -123,6 +141,18 @@ const loading = ref(false)
 const endpointStatuses = ref([])
 const searchQuery = ref('')
 const nowTimestamp = ref(Date.now())
+const storedThreshold = Number(localStorage.getItem(CERT_THRESHOLD_STORAGE_KEY))
+const expiringSoonHours = ref(
+  Number.isFinite(storedThreshold) && storedThreshold > 0 ? storedThreshold : DEFAULT_CERT_EXPIRING_SOON_HOURS
+)
+
+const certExpiringSoonSeconds = computed(() => Math.max(1, Number(expiringSoonHours.value) || DEFAULT_CERT_EXPIRING_SOON_HOURS) * 3600)
+
+const persistThreshold = () => {
+  const hours = Math.max(1, Number(expiringSoonHours.value) || DEFAULT_CERT_EXPIRING_SOON_HOURS)
+  expiringSoonHours.value = hours
+  localStorage.setItem(CERT_THRESHOLD_STORAGE_KEY, String(hours))
+}
 
 let nowTicker = null
 
@@ -184,7 +214,7 @@ const filteredCertificateEndpoints = computed(() => {
 const certificateStats = computed(() => {
   const total = sortedCertificateEndpoints.value.length
   const expired = sortedCertificateEndpoints.value.filter((item) => item.remainingSeconds < 0).length
-  const expiringSoon = sortedCertificateEndpoints.value.filter((item) => item.remainingSeconds >= 0 && item.remainingSeconds <= CERT_EXPIRING_SOON_SECONDS).length
+  const expiringSoon = sortedCertificateEndpoints.value.filter((item) => item.remainingSeconds >= 0 && item.remainingSeconds <= certExpiringSoonSeconds.value).length
   const healthy = Math.max(0, total - expired - expiringSoon)
   return {
     total,
@@ -232,7 +262,7 @@ const remainingClass = (remainingSeconds) => {
   if (remainingSeconds < 0) {
     return 'text-red-600'
   }
-  if (remainingSeconds <= CERT_EXPIRING_SOON_SECONDS) {
+  if (remainingSeconds <= certExpiringSoonSeconds.value) {
     return 'text-amber-600'
   }
   return 'text-green-600'

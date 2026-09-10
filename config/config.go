@@ -321,7 +321,7 @@ func parseAndValidateConfigBytes(yamlBytes []byte) (config *Config, err error) {
 			logr.Warn("WARNING: Please use the GATUS_LOG_LEVEL environment variable instead")
 		}
 		// XXX: End of v6.0.0 removals
-		ValidateAlertingConfig(config.Alerting, config.Endpoints, config.ExternalEndpoints)
+		ValidateAlertingConfig(config.Alerting, config.Endpoints, config.ExternalEndpoints, config.Suites)
 		if err := ValidateSecurityConfig(config); err != nil {
 			return nil, err
 		}
@@ -608,7 +608,7 @@ func ValidateSecurityConfig(config *Config) error {
 // Note that the alerting configuration has to be validated before the endpoint configuration, because the default alert
 // returned by provider.AlertProvider.GetDefaultAlert() must be parsed before endpoint.Endpoint.ValidateAndSetDefaults()
 // sets the default alert values when none are set.
-func ValidateAlertingConfig(alertingConfig *alerting.Config, endpoints []*endpoint.Endpoint, externalEndpoints []*endpoint.ExternalEndpoint) {
+func ValidateAlertingConfig(alertingConfig *alerting.Config, endpoints []*endpoint.Endpoint, externalEndpoints []*endpoint.ExternalEndpoint, suites []*suite.Suite) {
 	if alertingConfig == nil {
 		logr.Info("[config.ValidateAlertingConfig] Alerting is not configured")
 		return
@@ -687,6 +687,19 @@ func ValidateAlertingConfig(alertingConfig *alerting.Config, endpoints []*endpoi
 								if len(endpointAlert.ProviderOverride) > 0 {
 									if err = alertProvider.ValidateOverrides(ee.Group, endpointAlert); err != nil {
 										logr.Warnf("[config.ValidateAlertingConfig] endpoint with key=%s has invalid overrides for provider=%s: %s", ee.Key(), alertType, err.Error())
+									}
+								}
+							}
+						}
+					}
+					for _, monitoredSuite := range suites {
+						for alertIndex, suiteAlert := range monitoredSuite.Alerts {
+							if alertType == suiteAlert.Type {
+								logr.Debugf("[config.ValidateAlertingConfig] Parsing alert %d with default alert for provider=%s in suite with key=%s", alertIndex, alertType, monitoredSuite.Key())
+								provider.MergeProviderDefaultAlertIntoEndpointAlert(alertProvider.GetDefaultAlert(), suiteAlert)
+								if len(suiteAlert.ProviderOverride) > 0 {
+									if err = alertProvider.ValidateOverrides(monitoredSuite.Group, suiteAlert); err != nil {
+										logr.Warnf("[config.ValidateAlertingConfig] suite with key=%s has invalid overrides for provider=%s: %s", monitoredSuite.Key(), alertType, err.Error())
 									}
 								}
 							}
