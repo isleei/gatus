@@ -2655,6 +2655,8 @@ endpoints:
 | `alerting.wecom`                   | `wecom` 类型告警的配置（企业微信 / WeCom 机器人 webhook）                                    | `{}`          |
 | `alerting.wecom.webhook-url`       | 企业微信机器人 webhook URL                                                                   | 必填 `""`     |
 | `alerting.wecom.title`             | Markdown 通知标题                                                                            | `"Gatus"`     |
+| `alerting.wecom.text-triggered`    | 可选的触发告警 Markdown 正文模板。占位符：`[ENDPOINT]`、`[ENDPOINT_NAME]`、`[ENDPOINT_GROUP]`、`[ALERT_DESCRIPTION]`、`[FAILURE_COUNT]`、`[SUCCESS_COUNT]`、`[RESULT_CONDITIONS]`、`[RESULT_ERRORS]`。留空则保持历史英文默认正文。 | `""` |
+| `alerting.wecom.text-resolved`     | 可选的恢复告警 Markdown 正文模板（占位符同 `text-triggered`）。留空则保持历史英文默认正文。 | `""` |
 | `alerting.wecom.default-alert`     | 默认告警配置。<br />参见 [设置默认告警](#setting-a-default-alert)                              | N/A           |
 | `alerting.wecom.overrides`         | 可优先于默认配置的覆盖列表                                                                    | `[]`          |
 | `alerting.wecom.overrides[].group` | 将被此配置覆盖的端点组                                                                        | `""`          |
@@ -2664,6 +2666,16 @@ endpoints:
 alerting:
   wecom:
     webhook-url: "$GATUS_WECOM_WEBHOOK_URL"
+    title: "Gatus 监控"
+    text-triggered: |
+      **触发** [ENDPOINT]
+      失败阈值: [FAILURE_COUNT]
+      描述: [ALERT_DESCRIPTION]
+      [RESULT_CONDITIONS]
+    text-resolved: |
+      **恢复** [ENDPOINT]
+      成功阈值: [SUCCESS_COUNT]
+      描述: [ALERT_DESCRIPTION]
 
 endpoints:
   - name: website
@@ -2675,6 +2687,8 @@ endpoints:
       - type: wecom
         send-on-resolved: true
 ```
+
+> 不配置 `text-triggered` / `text-resolved` 时，正文与改动前完全一致（英文默认）。Suite 级告警也可使用相同模板；建议写短模板以降低合成消息噪音。
 
 
 #### 配置 Zapier 告警

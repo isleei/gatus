@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/TwiN/gatus/v5/alerting/alert"
 	"github.com/TwiN/gatus/v5/client"
@@ -22,6 +24,16 @@ var (
 type Config struct {
 	WebhookURL string `yaml:"webhook-url"`
 	Title      string `yaml:"title,omitempty"`
+
+	// TextTriggered is an optional markdown body template used when an alert is triggered.
+	// Supported placeholders: [ENDPOINT], [ENDPOINT_NAME], [ENDPOINT_GROUP], [ALERT_DESCRIPTION],
+	// [FAILURE_COUNT], [SUCCESS_COUNT], [RESULT_CONDITIONS], [RESULT_ERRORS].
+	// When empty, the historical English default body is used unchanged.
+	TextTriggered string `yaml:"text-triggered,omitempty"`
+
+	// TextResolved is an optional markdown body template used when an alert is resolved.
+	// Same placeholders as TextTriggered. When empty, the historical English default body is used unchanged.
+	TextResolved string `yaml:"text-resolved,omitempty"`
 }
 
 func (cfg *Config) Validate() error {
@@ -37,6 +49,12 @@ func (cfg *Config) Merge(override *Config) {
 	}
 	if len(override.Title) > 0 {
 		cfg.Title = override.Title
+	}
+	if len(override.TextTriggered) > 0 {
+		cfg.TextTriggered = override.TextTriggered
+	}
+	if len(override.TextResolved) > 0 {
+		cfg.TextResolved = override.TextResolved
 	}
 }
 
@@ -106,6 +124,36 @@ type Markdown struct {
 
 // buildRequestBody builds the request body for the provider
 func (provider *AlertProvider) buildRequestBody(cfg *Config, ep *endpoint.Endpoint, alert *alert.Alert, result *endpoint.Result, resolved bool) []byte {
+	title := cfg.Title
+	if len(title) == 0 {
+		title = "Gatus"
+	}
+	var bodyContent string
+	if resolved {
+		if len(cfg.TextResolved) > 0 {
+			bodyContent = provider.renderTextTemplate(cfg.TextResolved, ep, alert, result)
+		} else {
+			bodyContent = provider.defaultBodyContent(ep, alert, result, true)
+		}
+	} else {
+		if len(cfg.TextTriggered) > 0 {
+			bodyContent = provider.renderTextTemplate(cfg.TextTriggered, ep, alert, result)
+		} else {
+			bodyContent = provider.defaultBodyContent(ep, alert, result, false)
+		}
+	}
+	body := Body{
+		MsgType: "markdown",
+		Markdown: Markdown{
+			Content: fmt.Sprintf("**%s**\n%s", title, bodyContent),
+		},
+	}
+	bodyAsJSON, _ := json.Marshal(body)
+	return bodyAsJSON
+}
+
+// defaultBodyContent preserves the historical English WeCom body (message + description + conditions).
+func (provider *AlertProvider) defaultBodyContent(ep *endpoint.Endpoint, alert *alert.Alert, result *endpoint.Result, resolved bool) string {
 	var message string
 	if resolved {
 		message = fmt.Sprintf("An alert for **%s** has been resolved after passing successfully %d time(s) in a row", ep.DisplayName(), alert.SuccessThreshold)
@@ -127,18 +175,47 @@ func (provider *AlertProvider) buildRequestBody(cfg *Config, ep *endpoint.Endpoi
 			conditionResults += fmt.Sprintf("%s %s\n", prefix, conditionResult.Condition)
 		}
 	}
-	title := cfg.Title
-	if len(title) == 0 {
-		title = "Gatus"
+	return message + description + conditionResults
+}
+
+// renderTextTemplate replaces supported placeholders in a custom text template.
+// Values are inserted as-is (no extra escaping) to match other providers; callers should avoid
+// embedding untrusted markdown in endpoint names/descriptions if that is a concern.
+func (provider *AlertProvider) renderTextTemplate(tmpl string, ep *endpoint.Endpoint, alert *alert.Alert, result *endpoint.Result) string {
+	message := tmpl
+	message = strings.ReplaceAll(message, "[ENDPOINT]", ep.DisplayName())
+	message = strings.ReplaceAll(message, "[ENDPOINT_NAME]", ep.Name)
+	message = strings.ReplaceAll(message, "[ENDPOINT_GROUP]", ep.Group)
+	message = strings.ReplaceAll(message, "[ALERT_DESCRIPTION]", alert.GetDescription())
+	message = strings.ReplaceAll(message, "[FAILURE_COUNT]", strconv.Itoa(alert.FailureThreshold))
+	message = strings.ReplaceAll(message, "[SUCCESS_COUNT]", strconv.Itoa(alert.SuccessThreshold))
+	if strings.Contains(message, "[RESULT_CONDITIONS]") {
+		message = strings.ReplaceAll(message, "[RESULT_CONDITIONS]", formatConditionResults(result))
 	}
-	body := Body{
-		MsgType: "markdown",
-		Markdown: Markdown{
-			Content: fmt.Sprintf("**%s**\n%s%s%s", title, message, description, conditionResults),
-		},
+	if strings.Contains(message, "[RESULT_ERRORS]") {
+		message = strings.ReplaceAll(message, "[RESULT_ERRORS]", strings.Join(result.Errors, ", "))
 	}
-	bodyAsJSON, _ := json.Marshal(body)
-	return bodyAsJSON
+	return message
+}
+
+func formatConditionResults(result *endpoint.Result) string {
+	if result == nil || len(result.ConditionResults) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for i, conditionResult := range result.ConditionResults {
+		prefix := "[FAIL]"
+		if conditionResult.Success {
+			prefix = "[PASS]"
+		}
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(prefix)
+		b.WriteByte(' ')
+		b.WriteString(conditionResult.Condition)
+	}
+	return b.String()
 }
 
 // GetDefaultAlert returns the provider's default alert configuration

@@ -90,6 +90,19 @@ security:
 alerting:
   wecom:
     webhook-url: "$GATUS_WECOM_WEBHOOK_URL"
+    title: "Gatus 监控"
+    # 可选：中文告警正文模板（留空则使用英文默认，行为与历史一致）
+    # 占位符: [ENDPOINT] [ENDPOINT_NAME] [ENDPOINT_GROUP] [ALERT_DESCRIPTION]
+    #         [FAILURE_COUNT] [SUCCESS_COUNT] [RESULT_CONDITIONS] [RESULT_ERRORS]
+    text-triggered: |
+      **触发** [ENDPOINT]
+      失败阈值: [FAILURE_COUNT]
+      描述: [ALERT_DESCRIPTION]
+      [RESULT_CONDITIONS]
+    text-resolved: |
+      **恢复** [ENDPOINT]
+      成功阈值: [SUCCESS_COUNT]
+      描述: [ALERT_DESCRIPTION]
     default-alert:
       failure-threshold: 3
       success-threshold: 2
@@ -628,6 +641,8 @@ suites:
         conditions:
           - "[STATUS] == 200"
 ```
+
+Suite 合成消息可能较长。若使用企业微信，建议在 `alerting.wecom` 配置简短的 `text-triggered` / `text-resolved` 中文模板（见上文告警配置示例），用 `[ENDPOINT]`、`[ALERT_DESCRIPTION]`、`[FAILURE_COUNT]` 等占位符控制正文，避免默认英文长文刷屏。
 
 ### Admin 审计保留
 
