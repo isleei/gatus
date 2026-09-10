@@ -3,7 +3,8 @@
 > 本项目为 **Gatus** — 面向开发者的服务健康状态监控面板。
 > 支持 HTTP、ICMP、TCP、DNS、gRPC、WebSocket、SSH 等多种协议，提供 38 种告警渠道。
 
-> 演进规划见 [`docs/MILESTONES.md`](./MILESTONES.md)。
+> 演进规划见 [`docs/MILESTONES.md`](./MILESTONES.md)。  
+> Stages 0–4 仓内完成后的**人工运维检查清单**见 [`docs/OPS-RUNBOOK.md`](./OPS-RUNBOOK.md)（凭据轮换、哨兵部署、备份演练、生产加固）。
 
 ---
 
@@ -23,6 +24,7 @@
 - [健康检查与监控](#健康检查与监控)
 - [防自盲 / 哨兵](#防自盲--哨兵)
 - [Postgres 备份与恢复演练](#postgres-备份与恢复演练)
+- [运维手册（人工清单）](#运维手册人工清单)
 - [常见问题](#常见问题)
 
 ---
@@ -773,6 +775,16 @@ pg_restore --clean --if-exists --no-owner   -h "$PGHOST" -U "$PGUSER" -d gatus_r
 
 ---
 
+## 运维手册（人工清单）
+
+仓内 Stages 0–4（PR #4–#8）已交付文档与示例后，仍须人工完成的操作（凭据轮换、哨兵真实部署、Postgres 恢复演练、反代加固等）统一收敛在：
+
+**[`docs/OPS-RUNBOOK.md`](./OPS-RUNBOOK.md)**
+
+请按该手册编号清单勾选；本页保留详细部署与备份命令，runbook 只给可执行检查项与交叉链接。
+
+---
+
 ## 常见问题
 
 ### Q: 容器启动后无法连接 PostgreSQL
@@ -832,4 +844,4 @@ securityContext:
 
 ---
 
-*文档更新：2026-09-10（Stage 1 哨兵示例 + Postgres 备份演练）*
+*文档更新：2026-09-10（+ OPS-RUNBOOK 人工运维清单链接）*

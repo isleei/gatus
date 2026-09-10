@@ -1,5 +1,7 @@
 # 哨兵 Gatus（防自盲）示例
 
+> 运维部署检查清单（异主机、构建本 fork、验 `/health`、告警演练）：[`docs/OPS-RUNBOOK.md`](../../OPS-RUNBOOK.md) §2。
+
 本目录提供一套**轻量第二节点**配置：在**另一台主机 / 另一网络**上部署 Gatus，专门监视主实例与少量核心业务探活。它**不能替代**主 Gatus（无完整监控清单、无生产 Admin 工作流），只解决「主站挂了没人知道」的自盲问题。
 
 ## 监视什么
@@ -57,4 +59,4 @@ docker compose up -d --build
 - 主实例：完整端点清单、Postgres、Admin、证书页等。
 - **运维仍须真正部署哨兵**；本目录只提供 in-repo 交付物与文档。
 
-更多背景见 [`docs/DEPLOYMENT.md`](../../DEPLOYMENT.md)「防自盲 / 哨兵」与 [`docs/MILESTONES.md`](../../MILESTONES.md) 阶段 1。
+更多背景见 [`docs/DEPLOYMENT.md`](../../DEPLOYMENT.md)「防自盲 / 哨兵」、[`docs/MILESTONES.md`](../../MILESTONES.md) 阶段 1，以及可勾选清单 [`docs/OPS-RUNBOOK.md`](../../OPS-RUNBOOK.md) §2。
