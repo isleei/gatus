@@ -54,6 +54,15 @@ func TestInitializePrometheusMetrics(t *testing.T) {
 	if resultEndpointSuccess == nil {
 		t.Error("resultEndpointSuccess metric not initialized")
 	}
+	if resultBodySizeDriftPercent == nil {
+		t.Error("resultBodySizeDriftPercent metric not initialized")
+	}
+	if resultBodySizeDriftBreachStreak == nil {
+		t.Error("resultBodySizeDriftBreachStreak metric not initialized")
+	}
+	if resultBodySizeDriftBreachesTotal == nil {
+		t.Error("resultBodySizeDriftBreachesTotal metric not initialized")
+	}
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -328,5 +337,153 @@ gatus_suite_results_total{group="",key="_no-group-suite",name="no-group-suite",s
 `), "gatus_suite_results_duration_seconds", "gatus_suite_results_success", "gatus_suite_results_total")
 	if err != nil {
 		t.Errorf("Expected no errors but got: %v", err)
+	}
+}
+
+
+func TestPublishMetricsForEndpoint_BodySizeDrift(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	InitializePrometheusMetrics(&config.Config{}, reg)
+
+	ep := &endpoint.Endpoint{
+		Name:  "tamper-ep",
+		Group: "security",
+		URL:   "https://example.org/page",
+		TamperConfig: &endpoint.TamperConfig{
+			Enabled:                true,
+			BaselineSamples:        5,
+			DriftThresholdPercent:  20,
+			ConsecutiveBreaches:    2,
+		},
+		NumberOfBodySizeDriftBreachesInARow: 2,
+	}
+	drift := 35.0
+	bodySize := int64(1350)
+	baseline := int64(1000)
+	PublishMetricsForEndpoint(ep, &endpoint.Result{
+		HTTPStatus:              200,
+		Connected:               true,
+		Duration:                100 * time.Millisecond,
+		Success:                 false,
+		BodySizeBytes:           &bodySize,
+		BodySizeBaselineBytes:   &baseline,
+		BodySizeDriftPercent:    &drift,
+	}, []string{})
+
+	err := testutil.GatherAndCompare(reg, bytes.NewBufferString(`
+# HELP gatus_results_body_size_drift_breach_streak Consecutive body-size drift threshold breaches for the endpoint
+# TYPE gatus_results_body_size_drift_breach_streak gauge
+gatus_results_body_size_drift_breach_streak{group="security",key="security_tamper-ep",name="tamper-ep",type="HTTP"} 2
+# HELP gatus_results_body_size_drift_breaches_total Total number of body-size drift threshold breaches
+# TYPE gatus_results_body_size_drift_breaches_total counter
+gatus_results_body_size_drift_breaches_total{group="security",key="security_tamper-ep",name="tamper-ep",type="HTTP"} 1
+# HELP gatus_results_body_size_drift_percent Absolute body-size drift percentage versus the rolling baseline
+# TYPE gatus_results_body_size_drift_percent gauge
+gatus_results_body_size_drift_percent{group="security",key="security_tamper-ep",name="tamper-ep",type="HTTP"} 35
+`), "gatus_results_body_size_drift_percent", "gatus_results_body_size_drift_breach_streak", "gatus_results_body_size_drift_breaches_total")
+	if err != nil {
+		t.Errorf("Expected no errors but got: %v", err)
+	}
+
+	// Second breach increments the counter; streak gauge updates.
+	ep.NumberOfBodySizeDriftBreachesInARow = 3
+	drift = 42.0
+	PublishMetricsForEndpoint(ep, &endpoint.Result{
+		HTTPStatus:            200,
+		Connected:             true,
+		Duration:              110 * time.Millisecond,
+		Success:               false,
+		BodySizeBytes:         &bodySize,
+		BodySizeBaselineBytes: &baseline,
+		BodySizeDriftPercent:  &drift,
+	}, []string{})
+
+	err = testutil.GatherAndCompare(reg, bytes.NewBufferString(`
+# HELP gatus_results_body_size_drift_breach_streak Consecutive body-size drift threshold breaches for the endpoint
+# TYPE gatus_results_body_size_drift_breach_streak gauge
+gatus_results_body_size_drift_breach_streak{group="security",key="security_tamper-ep",name="tamper-ep",type="HTTP"} 3
+# HELP gatus_results_body_size_drift_breaches_total Total number of body-size drift threshold breaches
+# TYPE gatus_results_body_size_drift_breaches_total counter
+gatus_results_body_size_drift_breaches_total{group="security",key="security_tamper-ep",name="tamper-ep",type="HTTP"} 2
+# HELP gatus_results_body_size_drift_percent Absolute body-size drift percentage versus the rolling baseline
+# TYPE gatus_results_body_size_drift_percent gauge
+gatus_results_body_size_drift_percent{group="security",key="security_tamper-ep",name="tamper-ep",type="HTTP"} 42
+`), "gatus_results_body_size_drift_percent", "gatus_results_body_size_drift_breach_streak", "gatus_results_body_size_drift_breaches_total")
+	if err != nil {
+		t.Errorf("Expected no errors but got: %v", err)
+	}
+
+	// Streak reset: gauge goes to 0, counter stays put (no Inc).
+	ep.NumberOfBodySizeDriftBreachesInARow = 0
+	drift = 5.0
+	PublishMetricsForEndpoint(ep, &endpoint.Result{
+		HTTPStatus:            200,
+		Connected:             true,
+		Duration:              90 * time.Millisecond,
+		Success:               true,
+		BodySizeBytes:         &bodySize,
+		BodySizeBaselineBytes: &baseline,
+		BodySizeDriftPercent:  &drift,
+	}, []string{})
+
+	err = testutil.GatherAndCompare(reg, bytes.NewBufferString(`
+# HELP gatus_results_body_size_drift_breach_streak Consecutive body-size drift threshold breaches for the endpoint
+# TYPE gatus_results_body_size_drift_breach_streak gauge
+gatus_results_body_size_drift_breach_streak{group="security",key="security_tamper-ep",name="tamper-ep",type="HTTP"} 0
+# HELP gatus_results_body_size_drift_breaches_total Total number of body-size drift threshold breaches
+# TYPE gatus_results_body_size_drift_breaches_total counter
+gatus_results_body_size_drift_breaches_total{group="security",key="security_tamper-ep",name="tamper-ep",type="HTTP"} 2
+# HELP gatus_results_body_size_drift_percent Absolute body-size drift percentage versus the rolling baseline
+# TYPE gatus_results_body_size_drift_percent gauge
+gatus_results_body_size_drift_percent{group="security",key="security_tamper-ep",name="tamper-ep",type="HTTP"} 5
+`), "gatus_results_body_size_drift_percent", "gatus_results_body_size_drift_breach_streak", "gatus_results_body_size_drift_breaches_total")
+	if err != nil {
+		t.Errorf("Expected no errors but got: %v", err)
+	}
+}
+
+func TestPublishMetricsForEndpoint_BodySizeDrift_DisabledSkipsMetrics(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	InitializePrometheusMetrics(&config.Config{}, reg)
+
+	ep := &endpoint.Endpoint{
+		Name:  "plain-ep",
+		Group: "web",
+		URL:   "https://example.org/",
+	}
+	drift := 99.0
+	PublishMetricsForEndpoint(ep, &endpoint.Result{
+		HTTPStatus:           200,
+		Connected:            true,
+		Duration:             50 * time.Millisecond,
+		Success:              true,
+		BodySizeDriftPercent: &drift,
+	}, []string{})
+
+	// Metric families exist (registered) but should have no samples for this endpoint.
+	err := testutil.GatherAndCompare(reg, bytes.NewBufferString(``),
+		"gatus_results_body_size_drift_percent",
+		"gatus_results_body_size_drift_breach_streak",
+		"gatus_results_body_size_drift_breaches_total",
+	)
+	if err != nil {
+		t.Errorf("Expected no tamper metric samples when tamper disabled, got: %v", err)
+	}
+}
+
+func TestUnregisterPrometheusMetrics_IncludesBodySizeDrift(t *testing.T) {
+	reg := prometheus.NewRegistry()
+	InitializePrometheusMetrics(&config.Config{}, reg)
+	if resultBodySizeDriftPercent == nil || resultBodySizeDriftBreachStreak == nil || resultBodySizeDriftBreachesTotal == nil {
+		t.Fatal("expected tamper metrics to be initialized")
+	}
+	UnregisterPrometheusMetrics()
+	if metricsInitialized {
+		t.Fatal("expected metricsInitialized to be false after unregister")
+	}
+	// Re-init on same registry must succeed (no duplicate registration panic).
+	InitializePrometheusMetrics(&config.Config{}, reg)
+	if resultBodySizeDriftPercent == nil {
+		t.Fatal("expected tamper metrics after re-init")
 	}
 }
