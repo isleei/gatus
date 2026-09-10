@@ -31,6 +31,7 @@ var (
 		"secret",
 		"session",
 		"token",
+		"webhook", // covers webhook-url / webhookUrl / *-webhook* (not bare "url")
 	}
 	adminAuditKeyNormalizer = strings.NewReplacer("_", "", "-", "", " ", "")
 )
