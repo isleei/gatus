@@ -644,6 +644,8 @@ suites:
 
 Suite 合成消息可能较长。若使用企业微信，建议在 `alerting.wecom` 配置简短的 `text-triggered` / `text-resolved` 中文模板（见上文告警配置示例），用 `[ENDPOINT]`、`[ALERT_DESCRIPTION]`、`[FAILURE_COUNT]` 等占位符控制正文，避免默认英文长文刷屏。
 
+本 fork 会将 WeCom markdown `content` **硬限制在 ≤4096 UTF-8 字节**（企业微信机器人文档上限）；超长时优先保留标题/导语与 `failed steps:` 摘要，并追加截断说明，避免因超限被机器人静默拒收。
+
 ### Admin 审计保留
 
 ```yaml

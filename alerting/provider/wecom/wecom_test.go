@@ -2,9 +2,11 @@ package wecom
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/TwiN/gatus/v5/alerting/alert"
 	"github.com/TwiN/gatus/v5/client"
@@ -435,5 +437,120 @@ func TestAlertProvider_GetConfig(t *testing.T) {
 				t.Errorf("expected text-resolved %s, got %s", scenario.ExpectedOutput.TextResolved, cfg.TextResolved)
 			}
 		})
+	}
+}
+
+
+func TestTruncateMarkdownContent_underLimitUnchanged(t *testing.T) {
+	content := "**Gatus**\nshort body"
+	got := truncateMarkdownContent(content)
+	if got != content {
+		t.Fatalf("expected unchanged content, got %q", got)
+	}
+}
+
+func TestTruncateMarkdownContent_hardCapUTF8Bytes(t *testing.T) {
+	// Build an oversized suite-like body: header + huge condition dump + failed-steps summary at the end.
+	var b strings.Builder
+	b.WriteString("**Gatus**\n")
+	b.WriteString("An alert for **critical/checkout** has been triggered due to having failed 3 time(s) in a row\n")
+	b.WriteString("Description:\n> suite checkout failed\n")
+	b.WriteString("Condition results:\n")
+	for i := 0; i < 200; i++ {
+		b.WriteString(fmt.Sprintf("[FAIL] suite step step-%03d with a long diagnostic payload %s\n", i, strings.Repeat("x", 40)))
+	}
+	b.WriteString("failed steps: login, pay, confirm\n")
+	// Add multi-byte runes so byte-oriented truncation must not split UTF-8.
+	b.WriteString(strings.Repeat("告警详情", 200))
+	oversized := b.String()
+	if len([]byte(oversized)) <= maxMarkdownContentBytes {
+		t.Fatalf("test setup: expected oversized body, got %d bytes", len([]byte(oversized)))
+	}
+
+	got := truncateMarkdownContent(oversized)
+	gotBytes := len([]byte(got))
+	if gotBytes > maxMarkdownContentBytes {
+		t.Fatalf("expected <= %d UTF-8 bytes, got %d", maxMarkdownContentBytes, gotBytes)
+	}
+	if !utf8.ValidString(got) {
+		t.Fatal("truncated content must be valid UTF-8")
+	}
+	if !strings.Contains(got, "…(truncated: WeCom markdown content limited to 4096 UTF-8 bytes)") {
+		t.Fatalf("expected truncation ellipsis note, got %q", got)
+	}
+	if !strings.Contains(got, "**Gatus**") {
+		t.Fatal("expected title/header to be preserved")
+	}
+	if !strings.Contains(got, "has been triggered") {
+		t.Fatal("expected lead message to be preserved")
+	}
+	if !strings.Contains(got, "failed steps: login, pay, confirm") {
+		t.Fatalf("expected failed-steps summary to be preserved before long tail, got %q", got[:min(500, len(got))])
+	}
+}
+
+func TestAlertProvider_buildRequestBody_oversizedSuiteLikeStillValidJSON(t *testing.T) {
+	description := "suite checkout failed with " + strings.Repeat("detail-", 800)
+	var conditions []*endpoint.ConditionResult
+	for i := 0; i < 120; i++ {
+		conditions = append(conditions, &endpoint.ConditionResult{
+			Condition: fmt.Sprintf("suite step step-%03d == ok (%s)", i, strings.Repeat("y", 30)),
+			Success:   false,
+		})
+	}
+	cfg := &Config{
+		WebhookURL: "https://example.com/webhook",
+		Title:      "监控告警",
+		TextTriggered: "告警触发: **[ENDPOINT]**\n失败阈值: [FAILURE_COUNT]\n描述: [ALERT_DESCRIPTION]\n条件:\n[RESULT_CONDITIONS]\n错误: [RESULT_ERRORS]",
+	}
+	bodyBytes := (&AlertProvider{}).buildRequestBody(
+		cfg,
+		&endpoint.Endpoint{Name: "checkout", Group: "critical"},
+		&alert.Alert{Description: &description, FailureThreshold: 3, SuccessThreshold: 2},
+		&endpoint.Result{
+			ConditionResults: conditions,
+			Errors: []string{
+				"login: timeout",
+				"pay: 500",
+				"failed steps: login, pay, confirm",
+			},
+		},
+		false,
+	)
+	var body Body
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		t.Fatalf("expected valid JSON after truncation, got: %v\nraw=%s", err, string(bodyBytes))
+	}
+	if body.MsgType != "markdown" {
+		t.Fatalf("expected msgtype markdown, got %s", body.MsgType)
+	}
+	contentBytes := len([]byte(body.Markdown.Content))
+	if contentBytes > maxMarkdownContentBytes {
+		t.Fatalf("markdown content must be <= %d bytes, got %d", maxMarkdownContentBytes, contentBytes)
+	}
+	if !utf8.ValidString(body.Markdown.Content) {
+		t.Fatal("markdown content must be valid UTF-8")
+	}
+	if !strings.Contains(body.Markdown.Content, "…(truncated:") {
+		t.Fatalf("expected truncation note in oversized suite body, got %q", body.Markdown.Content[max(0, len(body.Markdown.Content)-120):])
+	}
+	if !strings.Contains(body.Markdown.Content, "**监控告警**") {
+		t.Fatal("expected title preserved")
+	}
+	if !strings.Contains(body.Markdown.Content, "failed steps: login, pay, confirm") {
+		t.Fatalf("expected failed-steps summary preserved, content head=%q", body.Markdown.Content[:min(400, len(body.Markdown.Content))])
+	}
+}
+
+func TestCutToUTF8Bytes_doesNotSplitRune(t *testing.T) {
+	s := "abc告警"
+	b := []byte(s)
+	// Cut inside the first multi-byte rune after "abc"
+	cut := cutToUTF8Bytes(b, 4) // '告' starts at index 3 and is 3 bytes
+	if !utf8.Valid(cut) {
+		t.Fatalf("cut must be valid UTF-8, got %v", cut)
+	}
+	if string(cut) != "abc" {
+		t.Fatalf("expected abc, got %q", string(cut))
 	}
 }
