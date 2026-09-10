@@ -94,6 +94,7 @@ Have any feedback or questions? [Create a discussion](https://github.com/TwiN/ga
     - [Configuring Twilio alerts](#configuring-twilio-alerts)
     - [Configuring Vonage alerts](#configuring-vonage-alerts)
     - [Configuring Webex alerts](#configuring-webex-alerts)
+    - [Configuring WeCom alerts](#configuring-wecom-alerts)
     - [Configuring Zapier alerts](#configuring-zapier-alerts)
     - [Configuring Zulip alerts](#configuring-zulip-alerts)
     - [Configuring custom alerts](#configuring-custom-alerts)
@@ -394,10 +395,28 @@ Here are a few cases in which suites could be useful:
 | `suites[].context`                | Initial context values that can be referenced by endpoints.                                         | `{}`          |
 | `suites[].ui`                     | UI configuration defaults for all endpoints in the suite (same fields as `endpoints[].ui`).        | `{}`          |
 | `suites[].endpoints`              | List of endpoints to execute sequentially.                                                          | Required `[]` |
+| `suites[].alerts`                 | List of alerts for the suite. Same alert types and parameters as `endpoints[].alerts`. <br />See [Alerting](#alerting). Triggered when the suite fails `failure-threshold` times in a row; resolved after `success-threshold` successes. | `[]`          |
 | `suites[].endpoints[].store`      | Map of values to extract from the response and store in the suite context (stored even on failure). | `{}`          |
 | `suites[].endpoints[].always-run` | Whether to execute this endpoint even if previous endpoints in the suite failed.                    | `false`       |
 
-**Note**: Suite-level alerts are not supported yet. Configure alerts on individual endpoints within the suite instead.
+You can configure suite-level alerts (in addition to per-endpoint alerts inside the suite). For a deployment-oriented WeCom example, see [Suite-level alerts in DEPLOYMENT.md](docs/DEPLOYMENT.md#suite-级告警).
+
+```yaml
+suites:
+  - name: checkout
+    group: critical
+    interval: 5m
+    alerts:
+      - type: wecom
+        failure-threshold: 2
+        success-threshold: 2
+        send-on-resolved: true
+    endpoints:
+      - name: login
+        url: "https://example.com/login"
+        conditions:
+          - "[STATUS] == 200"
+```
 
 #### Using Context in Endpoints
 Once values are stored in the context, they can be referenced in subsequent endpoints:
@@ -882,6 +901,7 @@ endpoints:
 | `alerting.twilio`          | Settings for alerts of type `twilio`. <br />See [Configuring Twilio alerts](#configuring-twilio-alerts).                                | `{}`    |
 | `alerting.vonage`          | Configuration for alerts of type `vonage`. <br />See [Configuring Vonage alerts](#configuring-vonage-alerts).                           | `{}`    |
 | `alerting.webex`           | Configuration for alerts of type `webex`. <br />See [Configuring Webex alerts](#configuring-webex-alerts).                              | `{}`    |
+| `alerting.wecom`           | Configuration for alerts of type `wecom`. <br />See [Configuring WeCom alerts](#configuring-wecom-alerts).                              | `{}`    |
 | `alerting.zapier`          | Configuration for alerts of type `zapier`. <br />See [Configuring Zapier alerts](#configuring-zapier-alerts).                           | `{}`    |
 | `alerting.zulip`           | Configuration for alerts of type `zulip`. <br />See [Configuring Zulip alerts](#configuring-zulip-alerts).                              | `{}`    |
 
@@ -2494,6 +2514,34 @@ endpoints:
       - "[STATUS] == 200"
     alerts:
       - type: webex
+        send-on-resolved: true
+```
+
+
+#### Configuring WeCom alerts
+| Parameter                          | Description                                                                                | Default       |
+|:-----------------------------------|:-------------------------------------------------------------------------------------------|:--------------|
+| `alerting.wecom`                   | Configuration for alerts of type `wecom` (WeCom / WeChat Work robot webhook)              | `{}`          |
+| `alerting.wecom.webhook-url`       | WeCom robot webhook URL                                                                    | Required `""` |
+| `alerting.wecom.title`             | Title of the markdown notification                                                         | `"Gatus"`     |
+| `alerting.wecom.default-alert`     | Default alert configuration. <br />See [Setting a default alert](#setting-a-default-alert) | N/A           |
+| `alerting.wecom.overrides`         | List of overrides that may be prioritized over the default configuration                   | `[]`          |
+| `alerting.wecom.overrides[].group` | Endpoint group for which the configuration will be overridden by this configuration        | `""`          |
+| `alerting.wecom.overrides[].*`     | See `alerting.wecom.*` parameters                                                          | `{}`          |
+
+```yaml
+alerting:
+  wecom:
+    webhook-url: "$GATUS_WECOM_WEBHOOK_URL"
+
+endpoints:
+  - name: website
+    url: "https://twin.sh/health"
+    interval: 5m
+    conditions:
+      - "[STATUS] == 200"
+    alerts:
+      - type: wecom
         send-on-resolved: true
 ```
 

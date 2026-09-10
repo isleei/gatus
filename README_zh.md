@@ -94,6 +94,7 @@ docker run -p 8080:8080 --name gatus twinproduction/gatus:stable
     - [配置 Twilio 告警](#configuring-twilio-alerts)
     - [配置 Vonage 告警](#configuring-vonage-alerts)
     - [配置 Webex 告警](#configuring-webex-alerts)
+    - [配置企业微信 (WeCom) 告警](#configuring-wecom-alerts)
     - [配置 Zapier 告警](#configuring-zapier-alerts)
     - [配置 Zulip 告警](#configuring-zulip-alerts)
     - [配置自定义告警](#configuring-custom-alerts)
@@ -392,10 +393,28 @@ POST /api/v1/endpoints/{key}/external?success={success}&error={error}&duration={
 | `suites[].context`                | 可被端点引用的初始上下文值。                                                                             | `{}`          |
 | `suites[].ui`                     | 套件中所有端点的 UI 配置默认值（与 `endpoints[].ui` 相同的字段）。                                        | `{}`          |
 | `suites[].endpoints`              | 要按顺序执行的端点列表。                                                                                | Required `[]` |
+| `suites[].alerts`                 | 套件级告警列表。告警类型与参数与 `endpoints[].alerts` 相同。<br />参见[告警](#alerting)。套件连续失败达到 `failure-threshold` 后触发；连续成功达到 `success-threshold` 后解除。 | `[]`          |
 | `suites[].endpoints[].store`      | 从响应中提取并存储到套件上下文中的值映射（即使失败也会存储）。                                              | `{}`          |
 | `suites[].endpoints[].always-run` | 即使套件中之前的端点失败，是否仍执行此端点。                                                              | `false`       |
 
-**注意**：套件级别的告警尚不支持。请在套件内的各个端点上配置告警。
+你可以配置套件级告警（也可同时在套件内各端点上配置告警）。面向部署的企业微信示例见 [DEPLOYMENT.md 中的 Suite 级告警](docs/DEPLOYMENT.md#suite-级告警)。
+
+```yaml
+suites:
+  - name: checkout
+    group: critical
+    interval: 5m
+    alerts:
+      - type: wecom
+        failure-threshold: 2
+        success-threshold: 2
+        send-on-resolved: true
+    endpoints:
+      - name: login
+        url: "https://example.com/login"
+        conditions:
+          - "[STATUS] == 200"
+```
 
 #### 在端点中使用上下文
 一旦值存储在上下文中，就可以在后续端点中引用它们：
@@ -875,6 +894,7 @@ endpoints:
 | `alerting.twilio`          | `twilio` 类型告警的设置。<br />参见[配置 Twilio 告警](#configuring-twilio-alerts)。                                | `{}`    |
 | `alerting.vonage`          | `vonage` 类型告警的配置。<br />参见[配置 Vonage 告警](#configuring-vonage-alerts)。                           | `{}`    |
 | `alerting.webex`           | `webex` 类型告警的配置。<br />参见[配置 Webex 告警](#configuring-webex-alerts)。                              | `{}`    |
+| `alerting.wecom`           | `wecom` 类型告警的配置。<br />参见[配置企业微信 (WeCom) 告警](#configuring-wecom-alerts)。                      | `{}`    |
 | `alerting.zapier`          | `zapier` 类型告警的配置。<br />参见[配置 Zapier 告警](#configuring-zapier-alerts)。                           | `{}`    |
 | `alerting.zulip`           | `zulip` 类型告警的配置。<br />参见[配置 Zulip 告警](#configuring-zulip-alerts)。                              | `{}`    |
 
@@ -2625,6 +2645,34 @@ endpoints:
       - "[STATUS] == 200"
     alerts:
       - type: webex
+        send-on-resolved: true
+```
+
+
+#### 配置企业微信 (WeCom) 告警
+| 参数                               | 描述                                                                                       | 默认值        |
+|:-----------------------------------|:-------------------------------------------------------------------------------------------|:--------------|
+| `alerting.wecom`                   | `wecom` 类型告警的配置（企业微信 / WeCom 机器人 webhook）                                    | `{}`          |
+| `alerting.wecom.webhook-url`       | 企业微信机器人 webhook URL                                                                   | 必填 `""`     |
+| `alerting.wecom.title`             | Markdown 通知标题                                                                            | `"Gatus"`     |
+| `alerting.wecom.default-alert`     | 默认告警配置。<br />参见 [设置默认告警](#setting-a-default-alert)                              | N/A           |
+| `alerting.wecom.overrides`         | 可优先于默认配置的覆盖列表                                                                    | `[]`          |
+| `alerting.wecom.overrides[].group` | 将被此配置覆盖的端点组                                                                        | `""`          |
+| `alerting.wecom.overrides[].*`     | 参见 `alerting.wecom.*` 参数                                                                 | `{}`          |
+
+```yaml
+alerting:
+  wecom:
+    webhook-url: "$GATUS_WECOM_WEBHOOK_URL"
+
+endpoints:
+  - name: website
+    url: "https://twin.sh/health"
+    interval: 5m
+    conditions:
+      - "[STATUS] == 200"
+    alerts:
+      - type: wecom
         send-on-resolved: true
 ```
 
