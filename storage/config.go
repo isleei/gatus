@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"time"
 )
 
 const (
@@ -36,6 +37,10 @@ type Config struct {
 
 	// MaximumNumberOfEvents is the number of events each endpoint should be able to provide
 	MaximumNumberOfEvents int `yaml:"maximum-number-of-events,omitempty"`
+
+	// AdminAuditMaxAge is how long admin audit logs are retained.
+	// Zero / omitted disables automatic cleanup. Example: 720h (30 days).
+	AdminAuditMaxAge time.Duration `yaml:"admin-audit-max-age,omitempty"`
 }
 
 // ValidateAndSetDefaults validates the configuration and sets the default values (if applicable)
@@ -54,6 +59,9 @@ func (c *Config) ValidateAndSetDefaults() error {
 	}
 	if c.MaximumNumberOfEvents <= 0 {
 		c.MaximumNumberOfEvents = DefaultMaximumNumberOfEvents
+	}
+	if c.AdminAuditMaxAge < 0 {
+		return errors.New("storage.admin-audit-max-age must be >= 0")
 	}
 	return nil
 }

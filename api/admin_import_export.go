@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -8,13 +9,14 @@ import (
 	"github.com/TwiN/gatus/v5/config/endpoint"
 	"github.com/TwiN/gatus/v5/config/suite"
 	"github.com/gofiber/fiber/v2"
+	"gopkg.in/yaml.v3"
 )
 
 type ManagedImportRequest struct {
-	EntityType string               `json:"entityType"`
-	Mode       string               `json:"mode"` // merge or replace
-	DryRun     bool                 `json:"dryRun"`
-	Data       ManagedConfigPayload `json:"data"`
+	EntityType string               `json:"entityType" yaml:"entityType"`
+	Mode       string               `json:"mode" yaml:"mode"` // merge or replace
+	DryRun     bool                 `json:"dryRun" yaml:"dryRun"`
+	Data       ManagedConfigPayload `json:"data" yaml:"data"`
 }
 
 type ImportPreviewResult struct {
@@ -54,10 +56,20 @@ func ExportManagedConfiguration(cfg *config.Config) fiber.Handler {
 
 func ImportManagedConfiguration(cfg *config.Config) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		var request ManagedImportRequest
-		if err := c.BodyParser(&request); err != nil {
+		request, err := parseManagedImportRequest(c)
+		if err != nil {
 			writeAdminAudit(c, cfg, "import", "monitor", "", nil, nil, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload: " + err.Error()})
+		}
+		// Query overrides help YAML overlay imports from the Admin UI
+		if q := c.Query("entityType"); len(q) > 0 {
+			request.EntityType = q
+		}
+		if q := c.Query("mode"); len(q) > 0 {
+			request.Mode = q
+		}
+		if _, ok := c.Queries()["dryRun"]; ok {
+			request.DryRun = c.QueryBool("dryRun")
 		}
 		request.EntityType = normalizeBatchEntityType(request.EntityType)
 		request.Mode = normalizeImportMode(request.Mode)
@@ -67,7 +79,7 @@ func ImportManagedConfiguration(cfg *config.Config) fiber.Handler {
 			writeAdminAudit(c, cfg, "import", request.EntityType, "", request, nil, err)
 			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": err.Error()})
 		}
-		preview, err := applyImportRequest(candidate, &request)
+		preview, err := applyImportRequest(candidate, request)
 		if err != nil {
 			writeAdminAudit(c, cfg, "import", request.EntityType, "", request, nil, err)
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": err.Error()})
@@ -89,6 +101,52 @@ func ImportManagedConfiguration(cfg *config.Config) fiber.Handler {
 		writeAdminAudit(c, cfg, "import", request.EntityType, "", request, preview, nil)
 		return c.Status(fiber.StatusOK).JSON(preview)
 	}
+}
+
+func parseManagedImportRequest(c *fiber.Ctx) (*ManagedImportRequest, error) {
+	body := c.Body()
+	if len(body) == 0 {
+		return nil, fmt.Errorf("empty body")
+	}
+	contentType := strings.ToLower(c.Get("Content-Type"))
+	format := strings.ToLower(strings.TrimSpace(c.Query("format")))
+	useYAML := strings.Contains(contentType, "yaml") || format == "yaml" || looksLikeYAMLImport(body)
+	if useYAML {
+		return parseManagedImportYAML(body)
+	}
+	var request ManagedImportRequest
+	if err := json.Unmarshal(body, &request); err != nil {
+		return nil, err
+	}
+	return &request, nil
+}
+
+func looksLikeYAMLImport(body []byte) bool {
+	trimmed := strings.TrimSpace(string(body))
+	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+		return false
+	}
+	return strings.Contains(trimmed, "endpoints:") || strings.Contains(trimmed, "suites:") || strings.Contains(trimmed, "external-endpoints:") || strings.Contains(trimmed, "entityType:")
+}
+
+func parseManagedImportYAML(body []byte) (*ManagedImportRequest, error) {
+	// Shape A: full ManagedImportRequest as YAML
+	var wrapped ManagedImportRequest
+	if err := yaml.Unmarshal(body, &wrapped); err == nil {
+		hasData := len(wrapped.Data.Endpoints) > 0 || len(wrapped.Data.Suites) > 0 || len(wrapped.Data.ExternalEndpoints) > 0 || wrapped.Data.Alerting != nil
+		if hasData || len(wrapped.EntityType) > 0 || len(wrapped.Mode) > 0 {
+			return &wrapped, nil
+		}
+	}
+	// Shape B: raw Gatus overlay fragment (endpoints / suites / external-endpoints / alerting)
+	var payload ManagedConfigPayload
+	if err := yaml.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("yaml: %w", err)
+	}
+	return &ManagedImportRequest{
+		Mode: "merge",
+		Data: payload,
+	}, nil
 }
 
 func applyImportRequest(candidate *config.Config, request *ManagedImportRequest) (*ImportPreviewResult, error) {

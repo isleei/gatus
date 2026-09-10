@@ -37,6 +37,7 @@ type ManagedSuitePayload struct {
 	Timeout   string                        `json:"timeout,omitempty"`
 	Context   map[string]interface{}        `json:"context,omitempty"`
 	Endpoints []ManagedSuiteEndpointPayload `json:"endpoints"`
+	Alerts    []ManagedAlertPayload         `json:"alerts,omitempty"`
 }
 
 type ManagedSuiteResponse struct {
@@ -48,6 +49,7 @@ type ManagedSuiteResponse struct {
 	Timeout   string                        `json:"timeout,omitempty"`
 	Context   map[string]interface{}        `json:"context,omitempty"`
 	Endpoints []ManagedSuiteEndpointPayload `json:"endpoints"`
+	Alerts    []ManagedAlertPayload         `json:"alerts,omitempty"`
 }
 
 type ManagedSuiteListResponse struct {
@@ -230,6 +232,7 @@ func toManagedSuiteResponse(monitoredSuite *suite.Suite) ManagedSuiteResponse {
 			UI:         managedEndpointUIConfigToPayload(endpointConfig.UIConfig),
 		})
 	}
+	response.Alerts = alertsToManagedPayload(monitoredSuite.Alerts)
 	return response
 }
 
@@ -299,6 +302,10 @@ func applyManagedSuitePayload(monitoredSuite *suite.Suite, payload *ManagedSuite
 	for key, value := range payload.Context {
 		contextMap[key] = value
 	}
+	suiteAlerts, err := buildManagedAlertsFromPayload(payload.Alerts)
+	if err != nil {
+		return err
+	}
 	monitoredSuite.Enabled = payload.Enabled
 	monitoredSuite.Name = strings.TrimSpace(payload.Name)
 	monitoredSuite.Group = strings.TrimSpace(payload.Group)
@@ -306,6 +313,7 @@ func applyManagedSuitePayload(monitoredSuite *suite.Suite, payload *ManagedSuite
 	monitoredSuite.Timeout = timeout
 	monitoredSuite.InitialContext = contextMap
 	monitoredSuite.Endpoints = endpoints
+	monitoredSuite.Alerts = suiteAlerts
 	return nil
 }
 

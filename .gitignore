@@ -21,6 +21,7 @@ gatus-passwd
 config/config.yml
 config.yaml
 !docs/examples/sentinel/config.yaml
+!docs/examples/multi-region/primary-config.yaml
 
 # Production managed overlay (never commit real endpoints / webhooks)
 .gatus-managed-overlay.json

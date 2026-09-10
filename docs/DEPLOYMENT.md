@@ -556,15 +556,92 @@ export GATUS_ADMIN_PASSWORD_BCRYPT_BASE64='<output>'
 
 ### OIDC（单点登录）
 
+上游已内置 OIDC。可与 Basic Auth **二选一或并存**（按 `security` 配置生效）。推荐生产用 OIDC，本地调试仍可用 Basic Auth。
+
 ```yaml
 security:
+  # 可选：保留 Basic 作为应急账号
+  basic:
+    username: "$GATUS_ADMIN_USER"
+    password-bcrypt-base64: "$GATUS_ADMIN_PASSWORD_BCRYPT_BASE64"
   oidc:
-    issuer-url: "https://your-oidc-provider.com"
+    issuer-url: "https://your-oidc-provider.com"          # IdP issuer，勿提交真实租户
     redirect-url: "https://your-gatus-domain.com/authorization-code/callback"
     client-id: "your-client-id"
-    client-secret: "${OIDC_CLIENT_SECRET}"
-    scopes: ["openid"]
-    allowed-subjects: ["user@example.com"]
+    client-secret: "${OIDC_CLIENT_SECRET}"               # 仅环境变量
+    scopes: ["openid", "profile", "email"]
+    # 允许登录的 subject（通常为 email / sub）；留空策略取决于上游实现，生产务必收紧
+    allowed-subjects:
+      - "ops@example.com"
+```
+
+运维注意：
+
+1. 在 IdP 注册回调 URL，与 `redirect-url` 完全一致。
+2. `client-secret`、issuer、client-id **不要**写入公开仓库。
+3. OIDC / Basic 保护的是 **Admin 与需鉴权的 API**；公开状态页路由仍可读（见下节）。
+4. 轮换 IdP 客户端密钥属运维操作，本仓库无法代劳。
+
+---
+
+## 公开状态页 vs Admin
+
+| 区域 | 路径 | 鉴权 |
+|------|------|------|
+| 公开状态页 | `/`、`/endpoints/...`、`/suites/...`、`/certificates` | 默认公开（可按网络层限制） |
+| Admin UI | `/admin` | `security.basic` / `security.oidc` |
+| Admin API | `/api/v1/admin/*` | 同上（`protectedAPIRouter`） |
+| 外部推送 | `/api/v1/endpoints/:key/external` | Bearer token（external-endpoints） |
+| Metrics | `/metrics` | 默认公开；务必用反代/网络策略限制 |
+
+`security.basic` / OIDC **不会**给整站所有路由加锁；公开看板与 Admin 已分离。部署时请：
+
+- 勿将 Admin 密码或 OIDC 密钥提交到公开仓
+- 对 `/metrics`、Admin 入口做来源 IP / 内网限制
+- 需要「整站登录墙」时在反代层另行配置（非 Gatus 默认行为）
+
+### 状态页默认按分组排序
+
+```yaml
+ui:
+  default-sort-by: group   # name | group | health
+```
+
+首页搜索栏会读取该配置（用户本地 `localStorage` 可覆盖）。
+
+### Suite 级告警
+
+可在 suite 上配置与端点相同的 `alerts`（wecom / slack / custom 等）。套件失败达到 `failure-threshold` 后触发，恢复达到 `success-threshold` 后解除：
+
+```yaml
+suites:
+  - name: checkout
+    group: critical
+    interval: 5m
+    alerts:
+      - type: wecom
+    endpoints:
+      - name: login
+        url: "https://example.com/login"
+        conditions:
+          - "[STATUS] == 200"
+```
+
+### Admin 审计保留
+
+```yaml
+storage:
+  type: postgres
+  path: "$GATUS_DB_URL"
+  admin-audit-max-age: 720h   # 30 天；0 / 省略 = 不自动清理
+```
+
+启用后进程内每日清理一次。也可手动：
+
+```bash
+curl -u admin:password -X DELETE \
+  'http://localhost:8080/api/v1/admin/audit-logs?days=30'
+# 或 ?maxAge=720h
 ```
 
 ---
@@ -607,12 +684,13 @@ metrics: true
 
 指标暴露地址：`http://localhost:8080/metrics`
 
-Prometheus 抓取配置：
+Prometheus 抓取配置（完整片段见 [`docs/examples/prometheus/`](./examples/prometheus/)）：
 
 ```yaml
 # prometheus.yml
 scrape_configs:
   - job_name: gatus
+    metrics_path: /metrics
     static_configs:
       - targets: ['gatus:8080']
 ```
@@ -646,6 +724,8 @@ docker compose up -d --build
 ```
 
 哨兵**不替代**主实例；完整端点清单、Admin、Postgres 仍由主站负责。真正上线部署仍属运维事项，见 [`MILESTONES.md`](./MILESTONES.md) 阶段 1。
+
+多地域汇总（主实例 `external-endpoints` + 卫星推送）见 [`docs/examples/multi-region/`](./examples/multi-region/)。
 
 ---
 

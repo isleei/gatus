@@ -52,13 +52,11 @@ func executeSuite(s *suite.Suite, cfg *config.Config, extraLabels []string) {
 	}
 	// Store result
 	UpdateSuiteStatus(s, result)
-	// Handle alerting for suite endpoints
-	for i, ep := range s.Endpoints {
-		if i < len(result.EndpointResults) {
-			epResult := result.EndpointResults[i]
-			// Handle alerting if configured and not under maintenance
-			if cfg.Alerting != nil && !cfg.Maintenance.IsUnderMaintenance() {
-				// Check if endpoint is under maintenance
+	// Handle alerting for suite endpoints (per-step) and suite-level alerts
+	if cfg.Alerting != nil && (cfg.Maintenance == nil || !cfg.Maintenance.IsUnderMaintenance()) {
+		for i, ep := range s.Endpoints {
+			if i < len(result.EndpointResults) {
+				epResult := result.EndpointResults[i]
 				inEndpointMaintenanceWindow := false
 				for _, maintenanceWindow := range ep.MaintenanceWindows {
 					if maintenanceWindow.IsUnderMaintenance() {
@@ -72,6 +70,7 @@ func executeSuite(s *suite.Suite, cfg *config.Config, extraLabels []string) {
 				}
 			}
 		}
+		HandleSuiteAlerting(s, result, cfg.Alerting)
 	}
 	logr.Infof("[watchdog.executeSuite] Completed suite=%s; success=%v; errors=%d; duration=%v; endpoints_executed=%d/%d", s.Name, result.Success, len(result.Errors), result.Duration, len(result.EndpointResults), len(s.Endpoints))
 }

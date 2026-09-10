@@ -266,8 +266,16 @@
                   spellcheck="false"
                 />
               </div>
+              <div v-if="selectedNotificationType === 'wecom'" class="rounded-md border bg-muted/30 p-3 text-xs space-y-1">
+                <p class="font-medium">{{ t('adminV2.wecomHelpTitle') }}</p>
+                <p class="text-muted-foreground whitespace-pre-wrap">{{ t('adminV2.wecomHelp') }}</p>
+              </div>
+              <div v-else-if="selectedNotificationType === 'custom'" class="rounded-md border bg-muted/30 p-3 text-xs space-y-1">
+                <p class="text-muted-foreground whitespace-pre-wrap">{{ t('adminV2.customWebhookHelp') }}</p>
+              </div>
+              <p v-if="notificationValidationError" class="text-sm text-red-600">{{ notificationValidationError }}</p>
               <div class="flex flex-wrap gap-2">
-                <Button size="sm" @click="saveNotification" :disabled="savingNotification">{{ t('admin.saveNotification') }}</Button>
+                <Button size="sm" @click="saveNotification" :disabled="savingNotification || !!notificationValidationError">{{ t('admin.saveNotification') }}</Button>
                 <Button size="sm" variant="destructive" @click="deleteNotification" :disabled="savingNotification">{{ t('admin.deleteNotification') }}</Button>
               </div>
               <p v-if="notificationMessage" class="text-sm text-muted-foreground">{{ notificationMessage }}</p>
@@ -550,6 +558,7 @@
           </div>
           <div>
             <label class="text-sm font-medium">{{ t('adminV2.importJson') }}</label>
+            <p class="text-xs text-muted-foreground mb-1">{{ t('adminV2.importFormatHint') }}</p>
             <textarea v-model="importExport.importJson" class="w-full min-h-[320px] rounded-md border bg-background p-2 text-xs font-mono" spellcheck="false" />
           </div>
         </div>
@@ -1307,29 +1316,53 @@ const copyExportToImport = () => {
   importExport.value.importJson = importExport.value.exportJson
 }
 
+const looksLikeYamlImport = (raw) => {
+  const trimmed = (raw || '').trim()
+  if (!trimmed || trimmed.startsWith('{') || trimmed.startsWith('[')) return false
+  return /^(endpoints|suites|external-endpoints|alerting|entityType)\s*:/m.test(trimmed)
+}
+
 const runImport = async (dryRun) => {
   importExportLoading.value = true
   importExportMessage.value = ''
   importPreview.value = ''
   try {
-    const parsed = JSON.parse(importExport.value.importJson || '{}')
-    const requestBody = {
-      entityType: importExport.value.entityType,
-      mode: importExport.value.mode,
-      dryRun,
-      data: {
-        alerting: parsed.alerting || null,
-        endpoints: Array.isArray(parsed.endpoints) ? parsed.endpoints : [],
-        externalEndpoints: Array.isArray(parsed.externalEndpoints) ? parsed.externalEndpoints : [],
-        suites: Array.isArray(parsed.suites) ? parsed.suites : [],
-      },
+    const raw = importExport.value.importJson || ''
+    let response
+    if (looksLikeYamlImport(raw)) {
+      const params = new URLSearchParams({
+        format: 'yaml',
+        mode: importExport.value.mode || 'merge',
+        entityType: importExport.value.entityType || '',
+        dryRun: dryRun ? 'true' : 'false',
+      })
+      response = await fetch(`/api/v1/admin/import?${params.toString()}`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/yaml' },
+        body: raw,
+      })
+    } else {
+      const parsed = JSON.parse(raw || '{}')
+      const data = parsed.data && typeof parsed.data === 'object' ? parsed.data : parsed
+      const requestBody = {
+        entityType: importExport.value.entityType || parsed.entityType || '',
+        mode: importExport.value.mode || parsed.mode || 'merge',
+        dryRun,
+        data: {
+          alerting: data.alerting || null,
+          endpoints: Array.isArray(data.endpoints) ? data.endpoints : [],
+          externalEndpoints: Array.isArray(data.externalEndpoints) ? data.externalEndpoints : [],
+          suites: Array.isArray(data.suites) ? data.suites : [],
+        },
+      }
+      response = await fetch('/api/v1/admin/import', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      })
     }
-    const response = await fetch('/api/v1/admin/import', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody),
-    })
     const data = await response.json()
     if (!response.ok) {
       throw new Error(data.error || 'Import failed')

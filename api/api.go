@@ -165,5 +165,6 @@ func (a *API) createRouter(cfg *config.Config) *fiber.App {
 	protectedAPIRouter.Put("/v1/admin/notifications/:type", PutManagedNotification(cfg))
 	protectedAPIRouter.Delete("/v1/admin/notifications/:type", DeleteManagedNotification(cfg))
 	protectedAPIRouter.Get("/v1/admin/audit-logs", GetAdminAuditLogs())
+	protectedAPIRouter.Delete("/v1/admin/audit-logs", DeleteAdminAuditLogsOlderThan(cfg))
 	return app
 }
