@@ -26,3 +26,6 @@ config.yaml
 # Production managed overlay (never commit real endpoints / webhooks)
 .gatus-managed-overlay.json
 .gatus-managed-overlay.json.bak.*
+
+# Local sentinel secrets (keep .env.example)
+docs/examples/sentinel/.env

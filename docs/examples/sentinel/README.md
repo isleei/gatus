@@ -31,18 +31,24 @@
 docker build -t gatus:local .
 
 cd docs/examples/sentinel
-export GATUS_PRIMARY_URL='https://status.example.com'
-export GATUS_WECOM_WEBHOOK_URL='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=REPLACE'
-export GATUS_SENTINEL_CRITICAL_URL_1='https://app.example.com/health'
-export GATUS_SENTINEL_CRITICAL_URL_2='https://api.example.com/health'
+cp .env.example .env
+# 编辑 .env，填入真实 URL / webhook（勿提交 .env）
 docker compose up -d --build
 ```
 
+也可不用 `.env`，改为 `export GATUS_*` 后执行 `docker compose up -d --build`（`compose.yaml` 中 `env_file` 对 `.env` 为 `required: false`）。
+
 `compose.yaml` 的 `build.context` 指向仓库根（`../../..`），也可先构建 `gatus:local` 再只用 `image`。
+
+### Fail-fast：未设置 URL 环境变量
+
+`config.yaml` 里端点 URL 为 `${GATUS_PRIMARY_URL}/health` 等形式。若对应环境变量**未设置或为空**，Gatus 启动时会因 `ErrEndpointWithNoURL` **直接崩溃退出**（防自盲配置错误被静默放过）。部署前务必确认 `.env` / 导出变量齐全。
 
 默认映射宿主机 `8081 → 8080`，避免与主实例端口冲突。
 
 ## 环境变量一览
+
+占位符模板：[`.env.example`](./.env.example)（复制为 `.env` 后填写；**勿**把真实密钥提交进 git）。
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
@@ -51,7 +57,7 @@ docker compose up -d --build
 | `GATUS_SENTINEL_CRITICAL_URL_1` | 是 | 核心业务探活 URL |
 | `GATUS_SENTINEL_CRITICAL_URL_2` | 建议 | 第二核心业务探活 URL |
 
-仓库内文件**仅含占位符**，不含真实密钥或客户域名。
+仓库内文件**仅含占位符**，不含真实密钥或客户域名。未设置必填 URL → 启动 fail-fast（`ErrEndpointWithNoURL`）。
 
 ## 与主实例的关系
 

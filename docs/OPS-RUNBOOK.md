@@ -1,7 +1,7 @@
 # 运维手册（OPS Runbook）
 
 > 仓库：`isleei/gatus`（本 fork）  
-> 适用：Stages 0–4 仓内交付已完成后（PR [#4](https://github.com/isleei/gatus/pull/4)–[#8](https://github.com/isleei/gatus/pull/8)），**仍须人工完成**的线上操作。  
+> 适用：Stages 0–4 仓内交付已完成后（PR [#4](https://github.com/isleei/gatus/pull/4)–[#9](https://github.com/isleei/gatus/pull/9)；后续 [#10](https://github.com/isleei/gatus/pull/10)/[#11](https://github.com/isleei/gatus/pull/11) 为套件告警持久化与 Admin 通知计数跟进），**仍须人工完成**的线上操作。  
 > 原则：清单可勾选；命令可复制；**密钥仅用占位符**，真实值只进环境变量 / 密钥库，永不进公开 git。
 
 相关文档：[`DEPLOYMENT.md`](./DEPLOYMENT.md) · [`MILESTONES.md`](./MILESTONES.md) · [`examples/sentinel/`](./examples/sentinel/) · [`examples/multi-region/`](./examples/multi-region/)
@@ -86,7 +86,7 @@ kubectl -n monitoring rollout restart deployment/gatus
 ## 2. 哨兵部署（阶段 1）
 
 完整说明与文件：**[`docs/examples/sentinel/`](./examples/sentinel/)**  
-（[`README.md`](./examples/sentinel/README.md) · [`compose.yaml`](./examples/sentinel/compose.yaml) · [`config.yaml`](./examples/sentinel/config.yaml)）
+（[`README.md`](./examples/sentinel/README.md) · [`compose.yaml`](./examples/sentinel/compose.yaml) · [`config.yaml`](./examples/sentinel/config.yaml) · [`.env.example`](./examples/sentinel/.env.example)）
 
 ### 检查清单
 
@@ -99,15 +99,15 @@ cd gatus
 docker build -t gatus:local .
 ```
 
-3. [ ] 按哨兵 README 导出环境变量（占位符）：
+3. [ ] 按哨兵 README 配置环境变量（推荐 `.env`；占位符见 [`.env.example`](./examples/sentinel/.env.example)）：
 
 ```bash
 cd docs/examples/sentinel
-export GATUS_PRIMARY_URL='https://status.example.com'
-export GATUS_WECOM_WEBHOOK_URL='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=REPLACE'
-export GATUS_SENTINEL_CRITICAL_URL_1='https://app.example.com/health'
-export GATUS_SENTINEL_CRITICAL_URL_2='https://api.example.com/health'
+cp .env.example .env
+# 编辑 .env 填入真实值（勿提交）；或改为 export GATUS_*
 ```
+
+> **Fail-fast**：任一必填 URL 环境变量未设置/为空时，Gatus 会因 `ErrEndpointWithNoURL` 启动即崩溃——这是刻意行为，避免「哨兵看似在跑但其实没探到主站」。
 
 4. [ ] 启动：
 
