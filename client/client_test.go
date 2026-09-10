@@ -111,6 +111,10 @@ func TestGetDomainExpiration(t *testing.T) {
 
 func TestPing(t *testing.T) {
 	t.Parallel()
+	// ICMP raw sockets typically require root / CAP_NET_RAW on Linux; skip rather than FAIL unprivileged CI/dev.
+	if runtime.GOOS != "windows" && os.Geteuid() != 0 {
+		t.Skip("ICMP ping requires root or CAP_NET_RAW; skipping when not running as root")
+	}
 	if success, rtt := Ping("127.0.0.1", &Config{Timeout: 500 * time.Millisecond}); !success {
 		t.Error("expected true")
 		if rtt == 0 {

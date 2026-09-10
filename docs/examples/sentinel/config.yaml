@@ -1,0 +1,52 @@
+# Sentinel (anti-self-blind) Gatus — lightweight secondary probe.
+# Deploy on another host / network than the primary instance.
+# All secrets and real URLs come from environment variables — placeholders only in git.
+
+storage:
+  # memory is fine for a short-lived sentinel; switch to sqlite if you want local history.
+  type: memory
+  # type: sqlite
+  # path: "/data/gatus-sentinel.db"
+
+alerting:
+  wecom:
+    webhook-url: "$GATUS_WECOM_WEBHOOK_URL"
+    default-alert:
+      failure-threshold: 2
+      success-threshold: 2
+      send-on-resolved: true
+
+endpoints:
+  # Primary Gatus health (the thing we must not go blind to)
+  - name: primary-gatus-health
+    group: sentinel
+    url: "${GATUS_PRIMARY_URL}/health"
+    interval: 1m
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 3000"
+    alerts:
+      - type: wecom
+        description: "Primary Gatus health check failed — possible self-blind"
+
+  # Critical business endpoint #1 (replace via env)
+  - name: critical-business-1
+    group: sentinel
+    url: "$GATUS_SENTINEL_CRITICAL_URL_1"
+    interval: 1m
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 5000"
+    alerts:
+      - type: wecom
+
+  # Critical business endpoint #2 (optional; set env or remove)
+  - name: critical-business-2
+    group: sentinel
+    url: "$GATUS_SENTINEL_CRITICAL_URL_2"
+    interval: 1m
+    conditions:
+      - "[STATUS] == 200"
+      - "[RESPONSE_TIME] < 5000"
+    alerts:
+      - type: wecom

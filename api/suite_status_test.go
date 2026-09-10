@@ -368,8 +368,7 @@ func TestSuiteStatuses(t *testing.T) {
 	defer cache.Clear()
 	firstResult := &testSuccessfulSuiteResult
 	secondResult := &testUnsuccessfulSuiteResult
-	store.Get().InsertSuiteResult(&testSuite, firstResult)
-	store.Get().InsertSuiteResult(&testSuite, secondResult)
+	// Zero timestamps before insert so SQLite (and memory) round-trips match expected JSON.
 	// Can't be bothered dealing with timezone issues on the worker that runs the automated tests
 	firstResult.Timestamp = time.Time{}
 	secondResult.Timestamp = time.Time{}
@@ -379,6 +378,8 @@ func TestSuiteStatuses(t *testing.T) {
 	for i := range secondResult.EndpointResults {
 		secondResult.EndpointResults[i].Timestamp = time.Time{}
 	}
+	store.Get().InsertSuiteResult(&testSuite, firstResult)
+	store.Get().InsertSuiteResult(&testSuite, secondResult)
 	api := New(&config.Config{
 		Metrics: true,
 		Storage: &storage.Config{

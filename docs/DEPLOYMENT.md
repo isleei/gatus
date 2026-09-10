@@ -21,6 +21,8 @@
 - [安全配置](#安全配置)
 - [关键环境变量](#关键环境变量)
 - [健康检查与监控](#健康检查与监控)
+- [防自盲 / 哨兵](#防自盲--哨兵)
+- [Postgres 备份与恢复演练](#postgres-备份与恢复演练)
 - [常见问题](#常见问题)
 
 ---
@@ -625,6 +627,72 @@ curl -X POST http://admin:password@localhost:8080/api/v1/admin/reload
 
 ---
 
+## 防自盲 / 哨兵
+
+主 Gatus 与业务同机房时，一旦本机或出口网络故障，监控自身也无法告警（自盲）。阶段 1 要求在**另一台主机 / 另一网络**部署轻量「哨兵」实例：
+
+- 监视主实例 `GET ${GATUS_PRIMARY_URL}/health`
+- 另加 1–2 个核心业务探活 URL
+- 告警走企业微信（`$GATUS_WECOM_WEBHOOK_URL`）
+- 短间隔（示例 1m）、memory 或 sqlite 即可
+
+**In-repo 示例**（仅占位符，无真实密钥）：[`docs/examples/sentinel/`](./examples/sentinel/)
+
+```bash
+# 仓库根目录构建本 fork 镜像后
+cd docs/examples/sentinel
+# 设置 GATUS_PRIMARY_URL / GATUS_WECOM_WEBHOOK_URL / GATUS_SENTINEL_CRITICAL_URL_*
+docker compose up -d --build
+```
+
+哨兵**不替代**主实例；完整端点清单、Admin、Postgres 仍由主站负责。真正上线部署仍属运维事项，见 [`MILESTONES.md`](./MILESTONES.md) 阶段 1。
+
+---
+
+## Postgres 备份与恢复演练
+
+生产使用 PostgreSQL 时，请定期备份并至少做过一次恢复演练。以下为**提纲**（无真实凭据；密码与主机用环境变量 / `.env`）。
+
+### 备份（pg_dump）
+
+```bash
+# 从运行 Postgres 的 compose 项目目录，或任意能连库的机器
+export PGHOST="${POSTGRES_HOST:-localhost}"
+export PGPORT="${POSTGRES_PORT:-5432}"
+export PGUSER="${POSTGRES_USER:-gatus}"
+export PGDATABASE="${POSTGRES_DB:-gatus}"
+# PGPASSWORD 从密钥管理 / .env 注入，勿写入 git
+
+mkdir -p ./backups
+pg_dump --format=custom --file="./backups/gatus-$(date -u +%Y%m%dT%H%M%SZ).dump"
+```
+
+建议：保留最近 N 份；异地再存一份；备份任务失败要有告警。
+
+### 恢复演练（pg_restore）
+
+在**非生产**库或临时实例上验证，勿在未确认的生产库上直接覆盖：
+
+```bash
+# 1) 准备空库（示例）
+# createdb -h "$PGHOST" -U "$PGUSER" gatus_restore_drill
+
+# 2) 恢复
+pg_restore --clean --if-exists --no-owner   -h "$PGHOST" -U "$PGUSER" -d gatus_restore_drill   ./backups/gatus-YYYYMMDDTHHMMSSZ.dump
+
+# 3) 验收：表存在、端点历史条数合理、Gatus 指向演练库可启动
+```
+
+### 演练检查清单
+
+- [ ] 备份任务定时跑通，产物可下载
+- [ ] 用最近一份 dump 在演练库 `pg_restore` 成功
+- [ ] 抽查 `endpoints` / 历史结果表行数与主库量级一致
+- [ ] 临时把 Gatus `storage.path` 指到演练库能启动并看到数据
+- [ ] 记录 RTO/RPO 预期，并更新本团队 runbook
+
+---
+
 ## 常见问题
 
 ### Q: 容器启动后无法连接 PostgreSQL
@@ -684,4 +752,4 @@ securityContext:
 
 ---
 
-*文档更新：2026-09-10（Stage 0 密钥清理）*
+*文档更新：2026-09-10（Stage 1 哨兵示例 + Postgres 备份演练）*

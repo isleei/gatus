@@ -1,0 +1,29 @@
+# Sentinel compose — build from THIS fork (Admin/WeCom live here; do not use twin/gatus).
+#
+# From this directory:
+#   export GATUS_PRIMARY_URL=https://status.example.com
+#   export GATUS_WECOM_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=REPLACE
+#   export GATUS_SENTINEL_CRITICAL_URL_1=https://app.example.com/health
+#   export GATUS_SENTINEL_CRITICAL_URL_2=https://api.example.com/health
+#   docker compose up -d --build
+#
+# Or pre-build at repo root: docker build -t gatus:local .  then set image: gatus:local
+
+services:
+  gatus-sentinel:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    image: gatus:local
+    restart: unless-stopped
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+    environment:
+      - GATUS_CONFIG_PATH=/config/config.yaml
+      - GATUS_LOG_LEVEL=INFO
+      - GATUS_PRIMARY_URL=${GATUS_PRIMARY_URL}
+      - GATUS_WECOM_WEBHOOK_URL=${GATUS_WECOM_WEBHOOK_URL}
+      - GATUS_SENTINEL_CRITICAL_URL_1=${GATUS_SENTINEL_CRITICAL_URL_1}
+      - GATUS_SENTINEL_CRITICAL_URL_2=${GATUS_SENTINEL_CRITICAL_URL_2}
