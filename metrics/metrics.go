@@ -19,6 +19,9 @@ var (
 	resultCertificateExpirationSeconds *prometheus.GaugeVec
 	resultDomainExpirationSeconds      *prometheus.GaugeVec
 	resultEndpointSuccess              *prometheus.GaugeVec
+	resultBodySizeDriftPercent         *prometheus.GaugeVec
+	resultBodySizeDriftBreachStreak    *prometheus.GaugeVec
+	resultBodySizeDriftBreachesTotal   *prometheus.CounterVec
 
 	// Suite metrics
 	suiteResultTotal           *prometheus.CounterVec
@@ -57,6 +60,15 @@ func UnregisterPrometheusMetrics() {
 	}
 	if resultEndpointSuccess != nil {
 		currentRegisterer.Unregister(resultEndpointSuccess)
+	}
+	if resultBodySizeDriftPercent != nil {
+		currentRegisterer.Unregister(resultBodySizeDriftPercent)
+	}
+	if resultBodySizeDriftBreachStreak != nil {
+		currentRegisterer.Unregister(resultBodySizeDriftBreachStreak)
+	}
+	if resultBodySizeDriftBreachesTotal != nil {
+		currentRegisterer.Unregister(resultBodySizeDriftBreachesTotal)
 	}
 
 	// Unregister suite metrics
@@ -137,6 +149,27 @@ func InitializePrometheusMetrics(cfg *config.Config, reg prometheus.Registerer) 
 	}, append([]string{"key", "group", "name", "type"}, extraLabels...))
 	reg.MustRegister(resultEndpointSuccess)
 
+	resultBodySizeDriftPercent = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Name:      "results_body_size_drift_percent",
+		Help:      "Absolute body-size drift percentage versus the rolling baseline",
+	}, append([]string{"key", "group", "name", "type"}, extraLabels...))
+	reg.MustRegister(resultBodySizeDriftPercent)
+
+	resultBodySizeDriftBreachStreak = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: namespace,
+		Name:      "results_body_size_drift_breach_streak",
+		Help:      "Consecutive body-size drift threshold breaches for the endpoint",
+	}, append([]string{"key", "group", "name", "type"}, extraLabels...))
+	reg.MustRegister(resultBodySizeDriftBreachStreak)
+
+	resultBodySizeDriftBreachesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: namespace,
+		Name:      "results_body_size_drift_breaches_total",
+		Help:      "Total number of body-size drift threshold breaches",
+	}, append([]string{"key", "group", "name", "type"}, extraLabels...))
+	reg.MustRegister(resultBodySizeDriftBreachesTotal)
+
 	// Suite metrics
 	suiteResultTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: namespace,
@@ -196,6 +229,17 @@ func PublishMetricsForEndpoint(ep *endpoint.Endpoint, result *endpoint.Result, e
 		resultEndpointSuccess.WithLabelValues(append([]string{ep.Key(), ep.Group, ep.Name, string(endpointType)}, labelValues...)...).Set(1)
 	} else {
 		resultEndpointSuccess.WithLabelValues(append([]string{ep.Key(), ep.Group, ep.Name, string(endpointType)}, labelValues...)...).Set(0)
+	}
+	// Tamper body-size drift metrics (fork feature). Reuse the same key/group/name/type label set.
+	if ep.TamperConfig != nil && ep.TamperConfig.Enabled {
+		baseLabels := append([]string{ep.Key(), ep.Group, ep.Name, string(endpointType)}, labelValues...)
+		if result.BodySizeDriftPercent != nil {
+			resultBodySizeDriftPercent.WithLabelValues(baseLabels...).Set(*result.BodySizeDriftPercent)
+		}
+		resultBodySizeDriftBreachStreak.WithLabelValues(baseLabels...).Set(float64(ep.NumberOfBodySizeDriftBreachesInARow))
+		if ep.NumberOfBodySizeDriftBreachesInARow > 0 {
+			resultBodySizeDriftBreachesTotal.WithLabelValues(baseLabels...).Inc()
+		}
 	}
 }
 
