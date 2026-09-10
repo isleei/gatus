@@ -2524,6 +2524,8 @@ endpoints:
 | `alerting.wecom`                   | Configuration for alerts of type `wecom` (WeCom / WeChat Work robot webhook)              | `{}`          |
 | `alerting.wecom.webhook-url`       | WeCom robot webhook URL                                                                    | Required `""` |
 | `alerting.wecom.title`             | Title of the markdown notification                                                         | `"Gatus"`     |
+| `alerting.wecom.text-triggered`    | Optional markdown body template for triggered alerts. Placeholders: `[ENDPOINT]`, `[ENDPOINT_NAME]`, `[ENDPOINT_GROUP]`, `[ALERT_DESCRIPTION]`, `[FAILURE_COUNT]`, `[SUCCESS_COUNT]`, `[RESULT_CONDITIONS]`, `[RESULT_ERRORS]`. Empty keeps the historical English default body. | `""` |
+| `alerting.wecom.text-resolved`     | Optional markdown body template for resolved alerts (same placeholders as `text-triggered`). Empty keeps the historical English default body. | `""` |
 | `alerting.wecom.default-alert`     | Default alert configuration. <br />See [Setting a default alert](#setting-a-default-alert) | N/A           |
 | `alerting.wecom.overrides`         | List of overrides that may be prioritized over the default configuration                   | `[]`          |
 | `alerting.wecom.overrides[].group` | Endpoint group for which the configuration will be overridden by this configuration        | `""`          |
@@ -2533,6 +2535,9 @@ endpoints:
 alerting:
   wecom:
     webhook-url: "$GATUS_WECOM_WEBHOOK_URL"
+    # Optional Chinese templates (omit for English defaults):
+    # text-triggered: "告警触发: **[ENDPOINT]**\n失败阈值: [FAILURE_COUNT]\n描述: [ALERT_DESCRIPTION]\n[RESULT_CONDITIONS]"
+    # text-resolved: "告警恢复: **[ENDPOINT]**\n连续成功: [SUCCESS_COUNT]\n描述: [ALERT_DESCRIPTION]"
 
 endpoints:
   - name: website
@@ -2543,6 +2548,24 @@ endpoints:
     alerts:
       - type: wecom
         send-on-resolved: true
+```
+
+Chinese on-call example (shorter suite-friendly body):
+
+```yaml
+alerting:
+  wecom:
+    webhook-url: "$GATUS_WECOM_WEBHOOK_URL"
+    title: "Gatus 监控"
+    text-triggered: |
+      **触发** [ENDPOINT]
+      失败阈值: [FAILURE_COUNT]
+      描述: [ALERT_DESCRIPTION]
+      [RESULT_CONDITIONS]
+    text-resolved: |
+      **恢复** [ENDPOINT]
+      成功阈值: [SUCCESS_COUNT]
+      描述: [ALERT_DESCRIPTION]
 ```
 
 

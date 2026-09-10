@@ -209,6 +209,126 @@ func TestAlertProvider_buildRequestBody(t *testing.T) {
 	}
 }
 
+func TestAlertProvider_buildRequestBody_defaultExact(t *testing.T) {
+	description := "description-1"
+	ep := &endpoint.Endpoint{Name: "endpoint-name", Group: "core"}
+	alertCfg := &alert.Alert{
+		Description:      &description,
+		SuccessThreshold: 5,
+		FailureThreshold: 3,
+	}
+	result := &endpoint.Result{
+		ConditionResults: []*endpoint.ConditionResult{
+			{Condition: "[CONNECTED] == true", Success: false},
+			{Condition: "[STATUS] == 200", Success: false},
+		},
+	}
+	bodyBytes := (&AlertProvider{}).buildRequestBody(
+		&Config{WebhookURL: "https://example.com/webhook"},
+		ep,
+		alertCfg,
+		result,
+		false,
+	)
+	var body Body
+	if err := json.Unmarshal(bodyBytes, &body); err != nil {
+		t.Fatal(err)
+	}
+	want := "**Gatus**\nAn alert for **core/endpoint-name** has been triggered due to having failed 3 time(s) in a row\nDescription:\n> description-1\nCondition results:\n[FAIL] [CONNECTED] == true\n[FAIL] [STATUS] == 200\n"
+	if body.Markdown.Content != want {
+		t.Errorf("default triggered body mismatch\nwant: %q\ngot:  %q", want, body.Markdown.Content)
+	}
+
+	resolvedBytes := (&AlertProvider{}).buildRequestBody(
+		&Config{WebhookURL: "https://example.com/webhook"},
+		ep,
+		alertCfg,
+		&endpoint.Result{
+			ConditionResults: []*endpoint.ConditionResult{
+				{Condition: "[CONNECTED] == true", Success: true},
+				{Condition: "[STATUS] == 200", Success: true},
+			},
+		},
+		true,
+	)
+	var resolvedBody Body
+	if err := json.Unmarshal(resolvedBytes, &resolvedBody); err != nil {
+		t.Fatal(err)
+	}
+	wantResolved := "**Gatus**\nAn alert for **core/endpoint-name** has been resolved after passing successfully 5 time(s) in a row\nDescription:\n> description-1\nCondition results:\n[PASS] [CONNECTED] == true\n[PASS] [STATUS] == 200\n"
+	if resolvedBody.Markdown.Content != wantResolved {
+		t.Errorf("default resolved body mismatch\nwant: %q\ngot:  %q", wantResolved, resolvedBody.Markdown.Content)
+	}
+}
+
+func TestAlertProvider_buildRequestBody_customTemplates(t *testing.T) {
+	description := "超时"
+	ep := &endpoint.Endpoint{Name: "checkout", Group: "critical"}
+	alertCfg := &alert.Alert{
+		Description:      &description,
+		SuccessThreshold: 2,
+		FailureThreshold: 3,
+	}
+	result := &endpoint.Result{
+		ConditionResults: []*endpoint.ConditionResult{
+			{Condition: "[STATUS] == 200", Success: false},
+		},
+		Errors: []string{"connection refused"},
+	}
+	cfg := &Config{
+		WebhookURL: "https://example.com/webhook",
+		Title:      "监控告警",
+		TextTriggered: "告警触发: **[ENDPOINT]**\n名称: [ENDPOINT_NAME]\n组: [ENDPOINT_GROUP]\n失败阈值: [FAILURE_COUNT]\n描述: [ALERT_DESCRIPTION]\n条件:\n[RESULT_CONDITIONS]\n错误: [RESULT_ERRORS]",
+		TextResolved:  "告警恢复: **[ENDPOINT]** (连续成功 [SUCCESS_COUNT] 次)\n描述: [ALERT_DESCRIPTION]",
+	}
+	triggered := (&AlertProvider{}).buildRequestBody(cfg, ep, alertCfg, result, false)
+	var triggeredBody Body
+	if err := json.Unmarshal(triggered, &triggeredBody); err != nil {
+		t.Fatal(err)
+	}
+	wantTriggered := "**监控告警**\n告警触发: **critical/checkout**\n名称: checkout\n组: critical\n失败阈值: 3\n描述: 超时\n条件:\n[FAIL] [STATUS] == 200\n错误: connection refused"
+	if triggeredBody.Markdown.Content != wantTriggered {
+		t.Errorf("custom triggered mismatch\nwant: %q\ngot:  %q", wantTriggered, triggeredBody.Markdown.Content)
+	}
+
+	resolved := (&AlertProvider{}).buildRequestBody(cfg, ep, alertCfg, result, true)
+	var resolvedBody Body
+	if err := json.Unmarshal(resolved, &resolvedBody); err != nil {
+		t.Fatal(err)
+	}
+	wantResolved := "**监控告警**\n告警恢复: **critical/checkout** (连续成功 2 次)\n描述: 超时"
+	if resolvedBody.Markdown.Content != wantResolved {
+		t.Errorf("custom resolved mismatch\nwant: %q\ngot:  %q", wantResolved, resolvedBody.Markdown.Content)
+	}
+
+	// Custom triggered should not fall back to English default fragments
+	if strings.Contains(triggeredBody.Markdown.Content, "has been triggered") {
+		t.Error("custom template should not include English default message")
+	}
+}
+
+func TestConfig_Merge_textTemplates(t *testing.T) {
+	cfg := Config{
+		WebhookURL:    "https://example.com/default",
+		Title:         "default",
+		TextTriggered: "triggered-default",
+		TextResolved:  "resolved-default",
+	}
+	cfg.Merge(&Config{
+		TextTriggered: "triggered-override",
+		TextResolved:  "resolved-override",
+	})
+	if cfg.TextTriggered != "triggered-override" {
+		t.Errorf("expected triggered override, got %q", cfg.TextTriggered)
+	}
+	if cfg.TextResolved != "resolved-override" {
+		t.Errorf("expected resolved override, got %q", cfg.TextResolved)
+	}
+	if cfg.WebhookURL != "https://example.com/default" {
+		t.Errorf("webhook-url should remain default, got %q", cfg.WebhookURL)
+	}
+}
+
 func TestAlertProvider_GetDefaultAlert(t *testing.T) {
 	if (&AlertProvider{DefaultAlert: &alert.Alert{}}).GetDefaultAlert() == nil {
 		t.Error("expected default alert to be not nil")
@@ -269,6 +389,26 @@ func TestAlertProvider_GetConfig(t *testing.T) {
 			InputAlert:     alert.Alert{ProviderOverride: map[string]any{"webhook-url": ""}},
 			ExpectedOutput: Config{WebhookURL: "https://example.com/default", Title: "default"},
 		},
+		{
+			Name: "provider-with-text-template-alert-override",
+			Provider: AlertProvider{
+				DefaultConfig: Config{
+					WebhookURL:    "https://example.com/default",
+					TextTriggered: "default-triggered",
+					TextResolved:  "default-resolved",
+				},
+			},
+			InputGroup: "",
+			InputAlert: alert.Alert{ProviderOverride: map[string]any{
+				"text-triggered": "alert-triggered",
+				"text-resolved":  "alert-resolved",
+			}},
+			ExpectedOutput: Config{
+				WebhookURL:    "https://example.com/default",
+				TextTriggered: "alert-triggered",
+				TextResolved:  "alert-resolved",
+			},
+		},
 	}
 	for _, scenario := range scenarios {
 		t.Run(scenario.Name, func(t *testing.T) {
@@ -287,6 +427,12 @@ func TestAlertProvider_GetConfig(t *testing.T) {
 			}
 			if cfg.Title != scenario.ExpectedOutput.Title {
 				t.Errorf("expected title %s, got %s", scenario.ExpectedOutput.Title, cfg.Title)
+			}
+			if cfg.TextTriggered != scenario.ExpectedOutput.TextTriggered {
+				t.Errorf("expected text-triggered %s, got %s", scenario.ExpectedOutput.TextTriggered, cfg.TextTriggered)
+			}
+			if cfg.TextResolved != scenario.ExpectedOutput.TextResolved {
+				t.Errorf("expected text-resolved %s, got %s", scenario.ExpectedOutput.TextResolved, cfg.TextResolved)
 			}
 		})
 	}
