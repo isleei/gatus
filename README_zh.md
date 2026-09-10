@@ -294,11 +294,13 @@ endpoints:
 | `endpoints[].alerts`                            | 给定端点的所有告警列表。<br />参见[告警](#alerting)。                                                                                              | `[]`                       |
 | `endpoints[].maintenance-windows`               | 给定端点的所有维护窗口列表。<br />参见[维护](#maintenance)。                                                                                       | `[]`                       |
 | `endpoints[].client`                            | [客户端配置](#client-configuration)。                                                                                                           | `{}`                       |
-| `endpoints[].tamper`                            | 基于响应体大小漂移的防篡改配置。                                                                                                                    | `{}`                       |
+| `endpoints[].tamper`                            | 防篡改检测：响应体大小漂移，以及可选的必含/禁含子串。                                                                                                  | `{}`                       |
 | `endpoints[].tamper.enabled`                    | 是否启用响应体大小漂移防篡改检测。                                                                                                                     | `false`                    |
 | `endpoints[].tamper.baseline-samples`           | 用于建立响应体大小基线的最近样本数。                                                                                                                      | `20`                       |
 | `endpoints[].tamper.drift-threshold-percent`    | 判定为一次漂移触发前允许的漂移百分比。                                                                                                                    | `20`                       |
 | `endpoints[].tamper.consecutive-breaches`       | 将检查判定为不健康前需要连续触发的次数。                                                                                                                      | `3`                        |
+| `endpoints[].tamper.required-substrings`        | 响应体中必须出现的字符串；空列表表示不启用必含检查。                                                                                                          | `[]`                       |
+| `endpoints[].tamper.forbidden-substrings`       | 响应体中禁止出现的字符串；空列表表示不启用禁含检查。                                                                                                          | `[]`                       |
 | `endpoints[].ui`                                | 端点级别的 UI 配置。                                                                                                                             | `{}`                       |
 | `endpoints[].ui.hide-conditions`                | 是否在结果中隐藏条件。注意这只会隐藏启用此选项后评估的条件。                                                                                        | `false`                    |
 | `endpoints[].ui.hide-hostname`                  | 是否在结果中隐藏主机名。                                                                                                                         | `false`                    |
@@ -311,6 +313,25 @@ endpoints:
 | `endpoints[].extra-labels`                      | 添加到指标的额外标签。用于将端点分组。                                                                                                             | `{}`                       |
 | `endpoints[].always-run`                        | （仅限套件）即使套件中之前的端点失败，是否仍执行此端点。                                                                                            | `false`                    |
 | `endpoints[].store`                             | （仅限套件）从响应中提取并存储到套件上下文中的值映射（即使失败也会存储）。                                                                            | `{}`                       |
+
+`tamper` 配置示例（响应体大小漂移 + 子串检查）：
+
+```yaml
+endpoints:
+  - name: example
+    url: "https://example.org/"
+    conditions:
+      - "[STATUS] == 200"
+    tamper:
+      enabled: true
+      baseline-samples: 20
+      drift-threshold-percent: 20
+      consecutive-breaches: 3
+      required-substrings:
+        - "</html>"
+      forbidden-substrings:
+        - "hacked"
+```
 
 你可以在请求体（`endpoints[].body`）中使用以下占位符：
 - `[ENDPOINT_NAME]`（从 `endpoints[].name` 解析）

@@ -24,14 +24,15 @@ test:
 ##########
 # Docker #
 ##########
+# Fork: tag as gatus:local (do not use twinproduction/gatus). See docs/DEPLOYMENT.md.
 
 .PHONY: docker-build
 docker-build:
-	docker build -t twinproduction/gatus:latest .
+	docker build -t gatus:local .
 
 .PHONY: docker-run
 docker-run:
-	docker run -p 8080:8080 --name gatus twinproduction/gatus:latest
+	docker run -p 8080:8080 --name gatus gatus:local
 
 .PHONY: docker-build-and-run
 docker-build-and-run: docker-build docker-run
