@@ -193,7 +193,7 @@ ENVIRONMENT=dev GATUS_CONFIG_PATH=./config.yaml go run main.go
 > 生产环境请**始终**用本仓库 `Dockerfile` 构建，**不要**使用 `twinproduction/gatus` / `ghcr.io/twin/gatus` 作为本 fork 的生产镜像。
 
 ```bash
-# 在本仓库根目录构建
+# 在本仓库根目录构建（或 make docker-build，同样打 gatus:local 标签）
 docker build -t gatus:local .
 
 # 运行（通过环境变量注入密钥；config 可用占位符 YAML）

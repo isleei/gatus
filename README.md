@@ -296,11 +296,13 @@ You can then configure alerts to be triggered when an endpoint is unhealthy once
 | `endpoints[].alerts`                            | List of all alerts for a given endpoint. <br />See [Alerting](#alerting).                                                                   | `[]`                       |
 | `endpoints[].maintenance-windows`               | List of all maintenance windows for a given endpoint. <br />See [Maintenance](#maintenance).                                                | `[]`                       |
 | `endpoints[].client`                            | [Client configuration](#client-configuration).                                                                                              | `{}`                       |
-| `endpoints[].tamper`                            | Body-size drift based tamper detection configuration.                                                                                       | `{}`                       |
+| `endpoints[].tamper`                            | Tamper detection: body-size drift and optional required/forbidden substrings.                                                               | `{}`                       |
 | `endpoints[].tamper.enabled`                    | Whether to enable body-size drift tamper detection.                                                                                         | `false`                    |
 | `endpoints[].tamper.baseline-samples`           | Number of recent samples used to build the body-size baseline.                                                                              | `20`                       |
 | `endpoints[].tamper.drift-threshold-percent`    | Allowed drift percentage before counting a breach.                                                                                           | `20`                       |
 | `endpoints[].tamper.consecutive-breaches`       | Number of consecutive breaches required to mark a check unhealthy.                                                                           | `3`                        |
+| `endpoints[].tamper.required-substrings`        | Strings that must be present in the response body. Empty disables required-substring checks.                                                 | `[]`                       |
+| `endpoints[].tamper.forbidden-substrings`       | Strings that must not be present in the response body. Empty disables forbidden-substring checks.                                            | `[]`                       |
 | `endpoints[].ui`                                | UI configuration at the endpoint level.                                                                                                     | `{}`                       |
 | `endpoints[].ui.hide-conditions`                | Whether to hide conditions from the results. Note that this only hides conditions from results evaluated from the moment this was enabled.  | `false`                    |
 | `endpoints[].ui.hide-hostname`                  | Whether to hide the hostname from the results.                                                                                              | `false`                    |
@@ -313,6 +315,25 @@ You can then configure alerts to be triggered when an endpoint is unhealthy once
 | `endpoints[].extra-labels`                      | Extra labels to add to the metrics. Useful for grouping endpoints together.                                                                 | `{}`                       |
 | `endpoints[].always-run`                        | (SUITES ONLY) Whether to execute this endpoint even if previous endpoints in the suite failed.                                              | `false`                    |
 | `endpoints[].store`                             | (SUITES ONLY) Map of values to extract from the response and store in the suite context (stored even on failure).                           | `{}`                       |
+
+Example `tamper` configuration (body-size drift + substring checks):
+
+```yaml
+endpoints:
+  - name: example
+    url: "https://example.org/"
+    conditions:
+      - "[STATUS] == 200"
+    tamper:
+      enabled: true
+      baseline-samples: 20
+      drift-threshold-percent: 20
+      consecutive-breaches: 3
+      required-substrings:
+        - "</html>"
+      forbidden-substrings:
+        - "hacked"
+```
 
 You may use the following placeholders in the body (`endpoints[].body`):
 - `[ENDPOINT_NAME]` (resolved from `endpoints[].name`)
