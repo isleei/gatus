@@ -1,12 +1,28 @@
+# Example / local template for this fork.
+# Secrets MUST come from environment variables (Gatus expands $ENV / ${ENV} in YAML).
+# Do NOT commit real DSNs, bcrypt hashes, webhooks, or customer hosts.
+
 storage:
   type: postgres
-  path: "postgres://gatus:3TNdx2DSbKNST75H@192.168.2.32:5432/gatus?sslmode=disable"
+  # Prefer a single DSN from env. Alternative:
+  # path: "postgres://${GATUS_DB_USER}:${GATUS_DB_PASSWORD}@${GATUS_DB_HOST}:5432/gatus?sslmode=disable"
+  path: "$GATUS_DB_URL"
   caching: true
 
 security:
   basic:
-    username: "admin"
-    password-bcrypt-base64: "JDJhJDA4JC82VHZtbGtpdkJjT3pzSnN0V1o4U3VKaXMyNzlFWkNaZXI1MUNQYkJQZ2xVYUtYeC4zdFVp"
+    username: "$GATUS_ADMIN_USER"
+    # Generate with: go run ./cmd/passwd  (do not commit the binary or real hashes)
+    password-bcrypt-base64: "$GATUS_ADMIN_PASSWORD_BCRYPT_BASE64"
+
+alerting:
+  wecom:
+    # Set GATUS_WECOM_WEBHOOK_URL to your WeCom robot webhook, or leave unset locally.
+    webhook-url: "$GATUS_WECOM_WEBHOOK_URL"
+    default-alert:
+      failure-threshold: 3
+      success-threshold: 2
+      send-on-resolved: true
 
 endpoints:
   - name: front-end

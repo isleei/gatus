@@ -109,11 +109,20 @@
 
 | 阶段 | 状态 | 备注 |
 |---|---|---|
-| 0 安全与基线 | 未开始 | 依赖合并 PR #4 |
+| 0 安全与基线 | 进行中 | 见下方 0.x 拆分 |
 | 1 防自盲 | 未开始 | |
 | 2 可维护性 | 未开始 | workflow scope 待补 |
 | 3 产品完善 | 未开始 | |
 | 4 可选增强 | 未开始 | |
+
+### 阶段 0 细项
+
+| # | 状态 | 备注 |
+|---|---|---|
+| 0.1 合并上游 PR [#4](https://github.com/isleei/gatus/pull/4) | 已完成 | 已合入 `master`（含里程碑文档 PR [#5](https://github.com/isleei/gatus/pull/5)） |
+| 0.2 轮换泄露凭据 | 进行中 / 待运维轮换 | **无法在 git 完成**：运维须在线上轮换 Postgres 密码、Basic Auth、企业微信 webhook，并作废旧 webhook |
+| 0.3 密钥移出公开仓 | 已完成（本 PR） | `config.yaml` / overlay / 文档示例已占位；生产 overlay 已移出跟踪并加入 `.gitignore`；**git 历史仍含旧密钥，必须配合 0.2 轮换** |
+| 0.4 使用自建镜像 | 文档已更新 | `docs/DEPLOYMENT.md` 强调 `docker build -t gatus:local .`，禁止本 fork 生产依赖 `ghcr.io/twin/gatus` / `twinproduction/gatus` |
 
 更新本表时请同步改「状态 / 备注」，并在相关 PR 描述中引用本文件对应章节。
 
