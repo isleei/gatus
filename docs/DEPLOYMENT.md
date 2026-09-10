@@ -3,6 +3,8 @@
 > 本项目为 **Gatus** — 面向开发者的服务健康状态监控面板。
 > 支持 HTTP、ICMP、TCP、DNS、gRPC、WebSocket、SSH 等多种协议，提供 38 种告警渠道。
 
+> 演进规划见 [`docs/MILESTONES.md`](./MILESTONES.md)。
+
 ---
 
 ## 目录
