@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/TwiN/gatus/v5/alerting/alert"
 	"github.com/TwiN/gatus/v5/client"
@@ -20,6 +21,13 @@ var (
 	ErrWebhookURLNotSet       = errors.New("webhook-url not set")
 	ErrDuplicateGroupOverride = errors.New("duplicate group override")
 )
+
+// maxMarkdownContentBytes is the WeCom robot markdown `content` hard limit (UTF-8 bytes).
+// Oversized payloads are rejected by WeCom and surface as silent alert failures.
+const maxMarkdownContentBytes = 4096
+
+// truncationEllipsisNote is appended when markdown content is hard-capped.
+const truncationEllipsisNote = "\n\n…(truncated: WeCom markdown content limited to 4096 UTF-8 bytes)"
 
 type Config struct {
 	WebhookURL string `yaml:"webhook-url"`
@@ -145,11 +153,84 @@ func (provider *AlertProvider) buildRequestBody(cfg *Config, ep *endpoint.Endpoi
 	body := Body{
 		MsgType: "markdown",
 		Markdown: Markdown{
-			Content: fmt.Sprintf("**%s**\n%s", title, bodyContent),
+			Content: truncateMarkdownContent(fmt.Sprintf("**%s**\n%s", title, bodyContent)),
 		},
 	}
 	bodyAsJSON, _ := json.Marshal(body)
 	return bodyAsJSON
+}
+
+// truncateMarkdownContent hard-caps WeCom markdown content to maxMarkdownContentBytes UTF-8 bytes.
+// When truncating, it prefers the header (title + lead message) and any "failed steps:" summary
+// (common in suite alerts), then fills the remaining budget from the rest of the body, and appends
+// a clear ellipsis note so on-call knows the payload was clipped.
+func truncateMarkdownContent(content string) string {
+	if len([]byte(content)) <= maxMarkdownContentBytes {
+		return content
+	}
+	note := truncationEllipsisNote
+	noteLen := len([]byte(note))
+	budget := maxMarkdownContentBytes - noteLen
+	if budget < 1 {
+		return string(cutToUTF8Bytes([]byte(content), maxMarkdownContentBytes))
+	}
+	prioritized := prioritizeHeaderAndFailedSteps(content)
+	return string(cutToUTF8Bytes([]byte(prioritized), budget)) + note
+}
+
+// prioritizeHeaderAndFailedSteps reorders content so truncation keeps the title/lead and any
+// "failed steps:" summary before dumping the long tail (condition dumps, large descriptions).
+func prioritizeHeaderAndFailedSteps(content string) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) <= 1 {
+		return content
+	}
+	header := []string{lines[0]}
+	idx := 1
+	// Keep the lead message line with the title when present.
+	if idx < len(lines) {
+		header = append(header, lines[idx])
+		idx++
+	}
+	var failed []string
+	var rest []string
+	for ; idx < len(lines); idx++ {
+		line := lines[idx]
+		if strings.Contains(strings.ToLower(line), "failed steps:") {
+			failed = append(failed, line)
+			continue
+		}
+		rest = append(rest, line)
+	}
+	var b strings.Builder
+	b.WriteString(strings.Join(header, "\n"))
+	if len(failed) > 0 {
+		b.WriteByte('\n')
+		b.WriteString(strings.Join(failed, "\n"))
+	}
+	if len(rest) > 0 {
+		b.WriteByte('\n')
+		b.WriteString(strings.Join(rest, "\n"))
+	}
+	return b.String()
+}
+
+// cutToUTF8Bytes returns b truncated to at most n bytes without splitting a UTF-8 rune.
+func cutToUTF8Bytes(b []byte, n int) []byte {
+	if n >= len(b) {
+		return b
+	}
+	if n <= 0 {
+		return nil
+	}
+	for n > 0 && !utf8.Valid(b[:n]) {
+		n--
+	}
+	// Walk back to a rune boundary if n lands mid-sequence (defensive; Valid usually handles this).
+	for n > 0 && n < len(b) && !utf8.RuneStart(b[n]) {
+		n--
+	}
+	return b[:n]
 }
 
 // defaultBodyContent preserves the historical English WeCom body (message + description + conditions).

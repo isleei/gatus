@@ -2552,6 +2552,8 @@ endpoints:
 | `alerting.wecom.overrides[].group` | Endpoint group for which the configuration will be overridden by this configuration        | `""`          |
 | `alerting.wecom.overrides[].*`     | See `alerting.wecom.*` parameters                                                          | `{}`          |
 
+Markdown `content` is hard-capped at **4096 UTF-8 bytes** (WeCom robot limit). Oversized suite-like bodies keep the title/lead and any `failed steps:` summary first, then append an ellipsis note so alerts are not silently rejected.
+
 ```yaml
 alerting:
   wecom:

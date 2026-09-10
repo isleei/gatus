@@ -2683,6 +2683,8 @@ endpoints:
 | `alerting.wecom.overrides[].group` | 将被此配置覆盖的端点组                                                                        | `""`          |
 | `alerting.wecom.overrides[].*`     | 参见 `alerting.wecom.*` 参数                                                                 | `{}`          |
 
+Markdown `content` 会硬限制在 **4096 UTF-8 字节**（企业微信机器人文档上限）。超长（如 suite 告警）时优先保留标题/导语与 `failed steps:` 摘要，并追加截断说明，避免被机器人静默拒收。
+
 ```yaml
 alerting:
   wecom:
