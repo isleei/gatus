@@ -47,6 +47,9 @@ Gatus 使用 YAML 配置文件。**配置路径解析优先级**：
 
 > **目录模式**：当 `GATUS_CONFIG_PATH` 指向目录时，目录下所有 `.yaml` / `.yml` 文件会被**深度合并**，便于按模块拆分配置。
 
+> **密钥与 overlay**：仓库内 `config.yaml` 仅为占位示例（`$GATUS_*`）。生产 managed overlay（`.gatus-managed-overlay.json`）含真实端点与 webhook，**不得**提交公开仓；可参考 [`docs/examples/gatus-managed-overlay.example.json`](./examples/gatus-managed-overlay.example.json)，并通过 `GATUS_MANAGED_OVERLAY_PATH` 指向私有路径。
+
+
 ### 最小配置示例
 
 ```yaml
@@ -71,17 +74,18 @@ storage:
   path: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable"
   caching: true
 
-# 安全认证（Basic Auth）
+# 安全认证（Basic Auth）— 用户名与 bcrypt 摘要均来自环境变量，勿提交真实值
 security:
   basic:
-    username: "admin"
-    # 使用 bcrypt+base64 加密的密码，可通过 ./gatus-passwd 生成
-    password-bcrypt-base64: "JDJhJDA4JC82VHZtbGtpdkJjT3pzSnN0V1o4U3VKaXMyNzlFWkNaZXI1MUNQYkJQZ2xVYUtYeC4zdFVp"
+    username: "$GATUS_ADMIN_USER"
+    # 用本仓库源码生成：go run ./cmd/passwd
+    # 将输出写入环境变量 GATUS_ADMIN_PASSWORD_BCRYPT_BASE64（勿把真实 hash 写进 git）
+    password-bcrypt-base64: "$GATUS_ADMIN_PASSWORD_BCRYPT_BASE64"
 
 # 告警配置（以企业微信为例）
 alerting:
   wecom:
-    webhook-url: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"
+    webhook-url: "$GATUS_WECOM_WEBHOOK_URL"
     default-alert:
       failure-threshold: 3
       success-threshold: 2
@@ -120,12 +124,13 @@ endpoints:
 
 ### 生成 bcrypt 密码
 
-使用项目内置工具 `gatus-passwd` 生成 Basic Auth 密码：
+**不要**把 `gatus-passwd` 二进制或真实 bcrypt hash 提交进仓库。用源码本地生成：
 
 ```bash
-./gatus-passwd
+go run ./cmd/passwd
 # 按提示输入密码，输出 bcrypt+base64 编码结果
-# 将结果填入 security.basic.password-bcrypt-base64
+# 导出为环境变量（推荐），或写入未入库的本地 config：
+#   export GATUS_ADMIN_PASSWORD_BCRYPT_BASE64='<output>'
 ```
 
 ---
@@ -135,8 +140,8 @@ endpoints:
 ### 1. 构建
 
 ```bash
-# 克隆仓库
-git clone https://github.com/TwiN/gatus.git
+# 克隆本 fork（含 Admin / WeCom 等定制；生产请用本仓库）
+git clone https://github.com/isleei/gatus.git
 cd gatus
 
 # 安装前端依赖并构建（前端已通过 go:embed 嵌入）
@@ -165,7 +170,34 @@ ENVIRONMENT=dev GATUS_CONFIG_PATH=./config.yaml go run main.go
 
 ## 部署方式二：Docker
 
-### 使用官方镜像
+### 自建镜像（本 fork 生产必用）
+
+> **重要**：本 fork 的 Admin v2、企业微信、证书页、分组鉴权等**不在**官方镜像中。  
+> 生产环境请**始终**用本仓库 `Dockerfile` 构建，**不要**使用 `twinproduction/gatus` / `ghcr.io/twin/gatus` 作为本 fork 的生产镜像。
+
+```bash
+# 在本仓库根目录构建
+docker build -t gatus:local .
+
+# 运行（通过环境变量注入密钥；config 可用占位符 YAML）
+docker run -d \
+  --name gatus \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -v $(pwd)/config:/config \
+  -e GATUS_LOG_LEVEL=INFO \
+  -e GATUS_DB_URL \
+  -e GATUS_ADMIN_USER \
+  -e GATUS_ADMIN_PASSWORD_BCRYPT_BASE64 \
+  -e GATUS_WECOM_WEBHOOK_URL \
+  gatus:local
+```
+
+> **注意**：最终镜像基于 `scratch`，体积极小，仅包含二进制文件和 CA 证书。
+
+### 上游官方镜像（仅作对比 / 无 fork 定制时）
+
+若你只需要上游功能、不需要本 fork 定制，才可考虑官方镜像；**部署本 fork 时请跳过本节**：
 
 ```bash
 docker run -d \
@@ -175,24 +207,6 @@ docker run -d \
   -v $(pwd)/config:/config \
   twinproduction/gatus:latest
 ```
-
-### 自行构建镜像
-
-```bash
-# 构建镜像（多阶段构建：golang:alpine → scratch）
-docker build -t my-gatus:latest .
-
-# 运行
-docker run -d \
-  --name gatus \
-  --restart unless-stopped \
-  -p 8080:8080 \
-  -v $(pwd)/config:/config \
-  -e GATUS_LOG_LEVEL=INFO \
-  my-gatus:latest
-```
-
-> **注意**：最终镜像基于 `scratch`，体积极小，仅包含二进制文件和 CA 证书。
 
 ---
 
@@ -206,7 +220,8 @@ docker run -d \
 # compose.yaml
 services:
   gatus:
-    image: twinproduction/gatus:latest
+    # 本 fork：先 docker build -t gatus:local . 再 compose up
+    image: gatus:local
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -214,9 +229,13 @@ services:
       - ./config:/config
     environment:
       - GATUS_LOG_LEVEL=INFO
+      - GATUS_ADMIN_USER=${GATUS_ADMIN_USER}
+      - GATUS_ADMIN_PASSWORD_BCRYPT_BASE64=${GATUS_ADMIN_PASSWORD_BCRYPT_BASE64}
+      - GATUS_WECOM_WEBHOOK_URL=${GATUS_WECOM_WEBHOOK_URL}
 ```
 
 ```bash
+docker build -t gatus:local .
 docker compose up -d
 ```
 
@@ -259,7 +278,8 @@ services:
       retries: 5
 
   gatus:
-    image: twinproduction/gatus:latest
+    # 本 fork：使用自建镜像，勿用 twinproduction/gatus
+    image: gatus:local
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -267,6 +287,10 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-gatus}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB:-gatus}
+      - GATUS_DB_URL=postgres://${POSTGRES_USER:-gatus}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-gatus}?sslmode=disable
+      - GATUS_ADMIN_USER=${GATUS_ADMIN_USER:-admin}
+      - GATUS_ADMIN_PASSWORD_BCRYPT_BASE64=${GATUS_ADMIN_PASSWORD_BCRYPT_BASE64}
+      - GATUS_WECOM_WEBHOOK_URL=${GATUS_WECOM_WEBHOOK_URL}
       - GATUS_LOG_LEVEL=INFO
     volumes:
       - ./config:/config
@@ -286,6 +310,9 @@ networks:
 POSTGRES_USER=gatus
 POSTGRES_PASSWORD=your_strong_password_here
 POSTGRES_DB=gatus
+GATUS_ADMIN_USER=admin
+GATUS_ADMIN_PASSWORD_BCRYPT_BASE64=  # go run ./cmd/passwd 生成后填入
+GATUS_WECOM_WEBHOOK_URL=             # 企业微信机器人 webhook，勿提交真实 URL
 ```
 
 **启动**：
@@ -313,8 +340,8 @@ storage:
 
 security:
   basic:
-    username: "admin"
-    password-bcrypt-base64: "YOUR_BCRYPT_BASE64_PASSWORD"
+    username: "$GATUS_ADMIN_USER"
+    password-bcrypt-base64: "$GATUS_ADMIN_PASSWORD_BCRYPT_BASE64"
 
 endpoints:
   - name: 示例服务
@@ -402,7 +429,7 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: gatus
-          image: twinproduction/gatus:latest
+          image: gatus:local  # 先构建本 fork 镜像并推到你的 registry
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -521,7 +548,8 @@ security:
 生成密码：
 
 ```bash
-./gatus-passwd
+go run ./cmd/passwd
+export GATUS_ADMIN_PASSWORD_BCRYPT_BASE64='<output>'
 ```
 
 ### OIDC（单点登录）
@@ -609,11 +637,12 @@ curl -X POST http://admin:password@localhost:8080/api/v1/admin/reload
 ### Q: 密码如何更新
 
 ```bash
-# 重新生成密码
-./gatus-passwd
+# 重新生成密码（写入环境变量 / 本地未入库配置，勿提交真实 hash）
+go run ./cmd/passwd
+export GATUS_ADMIN_PASSWORD_BCRYPT_BASE64='<new-output>'
 
-# 更新 config.yaml 中的 password-bcrypt-base64 后，等待热重载或手动触发
-curl -X POST http://admin:old_password@localhost:8080/api/v1/admin/reload
+# 热重载或手动触发
+curl -X POST http://"$GATUS_ADMIN_USER":"$OLD_PASSWORD"@localhost:8080/api/v1/admin/reload
 ```
 
 ### Q: 如何查看运行日志
@@ -655,4 +684,4 @@ securityContext:
 
 ---
 
-*文档生成时间：2026-02-27*
+*文档更新：2026-09-10（Stage 0 密钥清理）*

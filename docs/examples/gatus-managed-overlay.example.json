@@ -1,0 +1,51 @@
+{
+  "alerting": {
+    "WeCom": {
+      "DefaultConfig": {
+        "WebhookURL": "",
+        "Title": "Gatus"
+      },
+      "DefaultAlert": {
+        "Enabled": true,
+        "FailureThreshold": 3,
+        "SuccessThreshold": 2,
+        "SendOnResolved": true
+      }
+    }
+  },
+  "endpoints": [
+    {
+      "Enabled": true,
+      "Name": "example-frontend",
+      "Group": "core",
+      "URL": "https://twin.sh/health",
+      "Method": "GET",
+      "Interval": 300000000000,
+      "Conditions": [
+        "[STATUS] == 200",
+        "[BODY].status == UP"
+      ],
+      "Alerts": [
+        {
+          "Type": "wecom"
+        }
+      ]
+    },
+    {
+      "Enabled": true,
+      "Name": "example-backend",
+      "Group": "core",
+      "URL": "https://example.org/",
+      "Method": "GET",
+      "Interval": 300000000000,
+      "Conditions": [
+        "[STATUS] == 200"
+      ],
+      "Alerts": [
+        {
+          "Type": "wecom"
+        }
+      ]
+    }
+  ]
+}

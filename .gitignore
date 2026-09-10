@@ -17,5 +17,10 @@ node_modules
 *.db-shm
 *.db-wal
 gatus
+gatus-passwd
 config/config.yml
 config.yaml
+
+# Production managed overlay (never commit real endpoints / webhooks)
+.gatus-managed-overlay.json
+.gatus-managed-overlay.json.bak.*
